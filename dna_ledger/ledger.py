@@ -1,19 +1,22 @@
 from __future__ import annotations
-import json, os, hashlib
+import json, os
 from typing import Any, Dict, List, Optional
 from .hashing import sha256
-
-def canonical(obj: Any) -> bytes:
-    return json.dumps(obj, sort_keys=True, separators=(",", ":")).encode("utf-8")
+from .signing import verify_payload, canonical
 
 class HashChainedLedger:
     """
-    Minimal "blockchain" ledger:
-    Each entry is a block with:
-      - prev_hash
-      - payload (the record)
-      - block_hash = sha256(prev_hash || canonical(payload))
-    Stored as JSONL.
+    vNext:
+    - Hash-chained blocks (tamper evident)
+    - Each payload is Ed25519-signed (provenance)
+    Block schema:
+      {
+        "prev_hash": "...",
+        "payload": {...},
+        "signer": {"id": "dave", "ed25519_pub_pem_b64": "..."},
+        "sig": "<b64>",
+        "block_hash": "..."
+      }
     """
     def __init__(self, path: str):
         self.path = path
@@ -35,22 +38,35 @@ class HashChainedLedger:
         blocks = self._read_blocks()
         return blocks[-1]["block_hash"] if blocks else sha256(b"GENESIS")
 
-    def append(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+    def append(self, payload: Dict[str, Any], signer: Dict[str, str], sig_b64: str) -> Dict[str, Any]:
         prev = self.tip_hash()
         block_hash = sha256(prev.encode() + canonical(payload))
-        block = {"prev_hash": prev, "payload": payload, "block_hash": block_hash}
+        block = {
+            "prev_hash": prev,
+            "payload": payload,
+            "signer": signer,
+            "sig": sig_b64,
+            "block_hash": block_hash
+        }
         with open(self.path, "ab") as f:
-            f.write(canonical(block) + b"\n")
+            f.write(json.dumps(block, sort_keys=True, separators=(",", ":")).encode("utf-8") + b"\n")
         return block
 
     def verify(self) -> bool:
         blocks = self._read_blocks()
         prev = sha256(b"GENESIS")
         for b in blocks:
-            exp = sha256(prev.encode() + canonical(b["payload"]))
+            payload = b["payload"]
+            # chain integrity
+            exp_hash = sha256(prev.encode() + canonical(payload))
             if b["prev_hash"] != prev:
                 return False
-            if b["block_hash"] != exp:
+            if b["block_hash"] != exp_hash:
+                return False
+            # signature integrity
+            pub_b64 = b["signer"]["ed25519_pub_pem_b64"]
+            pub_pem = __import__("base64").b64decode(pub_b64.encode("utf-8"))
+            if not verify_payload(pub_pem, payload, b["sig"]):
                 return False
             prev = b["block_hash"]
         return True
