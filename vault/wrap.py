@@ -1,13 +1,21 @@
 from __future__ import annotations
-import os, base64
-from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey, X25519PublicKey
-from cryptography.hazmat.primitives.kdf.hkdf import HKDF
+
+import base64
+import os
+
 from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey, X25519PublicKey
 from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
+from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 from cryptography.hazmat.primitives.serialization import (
-    Encoding, PrivateFormat, PublicFormat, NoEncryption,
-    load_pem_private_key, load_pem_public_key
+    Encoding,
+    NoEncryption,
+    PrivateFormat,
+    PublicFormat,
+    load_pem_private_key,
+    load_pem_public_key,
 )
+
 
 def b64e(b: bytes) -> str:
     return base64.b64encode(b).decode("utf-8")
@@ -31,7 +39,12 @@ def _derive_wrap_key(shared: bytes, context: bytes) -> bytes:
     )
     return hkdf.derive(shared)
 
-def wrap_dek(owner_x25519_priv_pem: bytes, grantee_x25519_pub_pem: bytes, dek: bytes, context: bytes) -> str:
+def wrap_dek(
+    owner_x25519_priv_pem: bytes,
+    grantee_x25519_pub_pem: bytes,
+    dek: bytes,
+    context: bytes,
+) -> str:
     owner_priv = load_pem_private_key(owner_x25519_priv_pem, password=None)
     grantee_pub = load_pem_public_key(grantee_x25519_pub_pem)
     if not isinstance(owner_priv, X25519PrivateKey) or not isinstance(grantee_pub, X25519PublicKey):
@@ -43,7 +56,12 @@ def wrap_dek(owner_x25519_priv_pem: bytes, grantee_x25519_pub_pem: bytes, dek: b
     ct = aead.encrypt(nonce, dek, context)
     return b64e(nonce + ct)
 
-def unwrap_dek(grantee_x25519_priv_pem: bytes, owner_x25519_pub_pem: bytes, wrapped_b64: str, context: bytes) -> bytes:
+def unwrap_dek(
+    grantee_x25519_priv_pem: bytes,
+    owner_x25519_pub_pem: bytes,
+    wrapped_b64: str,
+    context: bytes,
+) -> bytes:
     grantee_priv = load_pem_private_key(grantee_x25519_priv_pem, password=None)
     owner_pub = load_pem_public_key(owner_x25519_pub_pem)
     if not isinstance(grantee_priv, X25519PrivateKey) or not isinstance(owner_pub, X25519PublicKey):

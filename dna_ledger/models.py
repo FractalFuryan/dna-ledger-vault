@@ -1,8 +1,10 @@
 from __future__ import annotations
-from pydantic import BaseModel, Field
-from typing import Dict, Literal, Optional, List
+
 import time
 import uuid
+from typing import Dict, List, Literal, Optional
+
+from pydantic import BaseModel, Field
 
 from dna_ledger import __schema__
 

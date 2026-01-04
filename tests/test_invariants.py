@@ -5,14 +5,12 @@ Tests core invariants without complex fixtures.
 Run with: pytest tests/test_invariants_simple.py -v
 """
 
-import json
 import tempfile
-from pathlib import Path
 
 import pytest
 
+from dna_ledger.hashing import h_block, h_commit, h_leaf, h_node, h_payload, merkle_root
 from dna_ledger.ledger import HashChainedLedger
-from dna_ledger.hashing import h_leaf, h_node, h_payload, h_block, h_commit, merkle_root
 from dna_ledger.merkle_proof import merkle_proof, verify_merkle_proof
 
 
@@ -76,8 +74,9 @@ def test_ledger_chain_integrity():
         ledger_path = f.name
     
     try:
-        from dna_ledger.signing import gen_ed25519, sign_payload
         import base64
+
+        from dna_ledger.signing import gen_ed25519, sign_payload
         
         ledger = HashChainedLedger(ledger_path)
         
@@ -116,8 +115,8 @@ def test_ledger_chain_integrity():
 
 def test_schema_versioning():
     """INVARIANT (Versioning): All payloads must include schema field."""
-    from dna_ledger.models import DatasetCommit
     from dna_ledger import __schema__
+    from dna_ledger.models import DatasetCommit
     
     commit = DatasetCommit(
         owner="test",
@@ -139,8 +138,9 @@ def test_no_duplicate_ids_in_ledger():
         ledger_path = f.name
     
     try:
-        from dna_ledger.signing import gen_ed25519, sign_payload
         import base64
+
+        from dna_ledger.signing import gen_ed25519, sign_payload
         
         ledger = HashChainedLedger(ledger_path)
         

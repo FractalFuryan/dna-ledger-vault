@@ -1,7 +1,9 @@
 from __future__ import annotations
+
 import os
-from typing import Tuple
-from .crypto import seal_bytes, open_bytes
+
+from .crypto import open_bytes, seal_bytes
+
 
 class Vault:
     def __init__(self, dirpath: str):

@@ -1,6 +1,9 @@
 from __future__ import annotations
+
 from typing import List, Tuple
-from .hashing import h_leaf, h_node
+
+from .hashing import h_node
+
 
 def merkle_proof(index: int, leaves: List[str]) -> List[Tuple[str, str]]:
     """

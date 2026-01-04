@@ -1,12 +1,33 @@
 from __future__ import annotations
-import argparse, os, json, time, base64
-from dna_ledger.hashing import sha256_file, chunk_hashes, merkle_root, sha256, h_commit
-from dna_ledger.models import DatasetCommit, ConsentGrant, ComputeAttestation, ConsentRevocation, KeyRotationEvent, KeyWrapEvent
+
+import argparse
+import base64
+import json
+import os
+import time
+from typing import Any, cast
+
+from dna_ledger.hashing import (
+    chunk_hashes,
+    h_commit,
+    merkle_root,
+    sha256,
+    sha256_file,
+)
 from dna_ledger.ledger import HashChainedLedger
+from dna_ledger.models import (
+    ComputeAttestation,
+    ConsentGrant,
+    ConsentRevocation,
+    DatasetCommit,
+    KeyRotationEvent,
+    KeyWrapEvent,
+)
 from dna_ledger.signing import gen_ed25519, sign_payload
-from vault.crypto import new_key, key_to_hex, key_from_hex
+from vault.crypto import key_to_hex, new_key
 from vault.store import Vault
 from vault.wrap import gen_x25519, wrap_dek
+
 
 def b64e(b: bytes) -> str:
     return base64.b64encode(b).decode("utf-8")
@@ -27,17 +48,17 @@ def ensure_state(out: str):
         "identities": os.path.join(out, "identities.json"),
     }
 
-def load_keys(path: str) -> dict:
+def load_keys(path: str) -> dict[str, Any]:
     if os.path.exists(path):
-        return json.load(open(path, "r", encoding="utf-8"))
+        return cast(dict[str, Any], json.load(open(path, "r", encoding="utf-8")))
     return {}
 
 def save_keys(path: str, keys: dict):
     json.dump(keys, open(path, "w", encoding="utf-8"), indent=2, sort_keys=True)
 
-def load_identities(path: str) -> dict:
+def load_identities(path: str) -> dict[str, Any]:
     if os.path.exists(path):
-        return json.load(open(path, "r", encoding="utf-8"))
+        return cast(dict[str, Any], json.load(open(path, "r", encoding="utf-8")))
     return {}
 
 def save_identities(path: str, ids: dict):
@@ -51,7 +72,6 @@ def signer_bundle(ids: dict, who: str) -> tuple[dict, bytes]:
     """
     if who not in ids:
         raise SystemExit(f"❌ Unknown identity: {who}. Run init-identities first.")
-    ed_pub = b64d(ids[who]["ed25519_pub_pem_b64"])
     ed_priv = b64d(ids[who]["ed25519_priv_pem_b64"])
     signer = {"id": who, "ed25519_pub_pem_b64": ids[who]["ed25519_pub_pem_b64"]}
     return signer, ed_priv
@@ -145,7 +165,7 @@ def cmd_export_evidence(args):
         print(f"📦 Exporting all {len(filtered_blocks)} blocks")
     
     # Create evidence payload
-    from dna_ledger import __schema__, __version__, __invariants__
+    from dna_ledger import __invariants__, __schema__, __version__
     
     evidence = {
         "schema": __schema__,
@@ -187,7 +207,6 @@ def cmd_export_evidence(args):
         
         if commits:
             from dna_ledger.merkle_proof import merkle_proof
-            from dna_ledger.hashing import h_leaf
             
             commit = commits[0]  # Latest commit for this dataset
             chunk_hashes = commit["chunk_hashes"]
@@ -412,7 +431,7 @@ def cmd_rotate(args):
     ledger.append(evt_payload, signer=signer, sig_b64=sig)
 
     # Emit KeyWrapEvents (append-only, no mutation)
-    print(f"🔁 Emitting KeyWrapEvents for active grantees...")
+    print("🔁 Emitting KeyWrapEvents for active grantees...")
     rewrap_count = 0
     for purpose in ["clinical", "ancestry", "research", "pharma", "ml_training"]:
         grants = active_grants(payloads, args.dataset_id, purpose)
@@ -512,7 +531,7 @@ def cmd_verify(args):
     if not ok:
         raise SystemExit(1)
 
-def main():
+def main() -> None:
     p = argparse.ArgumentParser(prog="dna-ledger-vault")
     sub = p.add_subparsers(dest="cmd", required=True)
 
@@ -581,7 +600,8 @@ def main():
     v.set_defaults(func=cmd_verify)
 
     args = p.parse_args()
-    args.func(args)
+    if hasattr(args, "func"):
+        args.func(args)
 
 if __name__ == "__main__":
     main()

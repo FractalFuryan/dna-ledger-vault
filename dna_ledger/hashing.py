@@ -1,6 +1,8 @@
 from __future__ import annotations
-import hashlib, json
-from typing import Any, Iterable, List, Tuple
+
+import hashlib
+import json
+from typing import Any, List, Tuple
 
 CHUNK = 1024 * 1024  # 1MB
 

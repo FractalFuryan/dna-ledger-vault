@@ -1,11 +1,19 @@
 from __future__ import annotations
-import base64, json
-from typing import Any, Dict, Optional
+
+import base64
+import json
+from typing import Any, Dict
+
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey, Ed25519PublicKey
 from cryptography.hazmat.primitives.serialization import (
-    Encoding, PrivateFormat, PublicFormat, NoEncryption,
-    load_pem_private_key, load_pem_public_key
+    Encoding,
+    NoEncryption,
+    PrivateFormat,
+    PublicFormat,
+    load_pem_private_key,
+    load_pem_public_key,
 )
+
 
 def canonical(obj: Any) -> bytes:
     return json.dumps(obj, sort_keys=True, separators=(",", ":")).encode("utf-8")

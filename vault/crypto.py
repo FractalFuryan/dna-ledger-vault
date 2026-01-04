@@ -1,6 +1,10 @@
 from __future__ import annotations
-import os, base64, binascii
+
+import binascii
+import os
+
 from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
+
 
 def new_key() -> bytes:
     return os.urandom(32)

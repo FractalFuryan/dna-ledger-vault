@@ -1,9 +1,14 @@
 from __future__ import annotations
-import json, os
-from typing import Any, Dict, List, Optional
-from .hashing import h_block, h_payload
-from .signing import verify_payload, canonical
+
+import json
+import os
+from typing import Any, Dict, List
+
 from dna_ledger import MIN_SCHEMA_VERSION, SUPPORTED_SCHEMAS
+
+from .hashing import h_block
+from .signing import verify_payload
+
 
 class SchemaDowngradeError(Exception):
     """Raised when a payload has an unsupported or older schema."""
