@@ -3,6 +3,11 @@ import json, os
 from typing import Any, Dict, List, Optional
 from .hashing import h_block, h_payload
 from .signing import verify_payload, canonical
+from dna_ledger import MIN_SCHEMA_VERSION, SUPPORTED_SCHEMAS
+
+class SchemaDowngradeError(Exception):
+    """Raised when a payload has an unsupported or older schema."""
+    pass
 
 class HashChainedLedger:
     """
@@ -39,6 +44,17 @@ class HashChainedLedger:
         return blocks[-1]["block_hash"] if blocks else h_block({"genesis": True})
 
     def append(self, payload: Dict[str, Any], signer: Dict[str, str], sig_b64: str) -> Dict[str, Any]:
+        # Schema validation: prevent downgrade attacks
+        schema = payload.get("schema")
+        if schema and schema not in SUPPORTED_SCHEMAS:
+            raise SchemaDowngradeError(
+                f"Unsupported schema '{schema}'. Supported: {SUPPORTED_SCHEMAS}"
+            )
+        if schema and schema < MIN_SCHEMA_VERSION:
+            raise SchemaDowngradeError(
+                f"Schema '{schema}' older than minimum required '{MIN_SCHEMA_VERSION}'"
+            )
+        
         prev = self.tip_hash()
         # Block hash covers full header: prev + payload + signer + sig
         block_header = {
