@@ -1,7 +1,7 @@
 from __future__ import annotations
 import json, os
 from typing import Any, Dict, List, Optional
-from .hashing import sha256
+from .hashing import h_block, h_payload
 from .signing import verify_payload, canonical
 
 class HashChainedLedger:
@@ -36,37 +36,48 @@ class HashChainedLedger:
 
     def tip_hash(self) -> str:
         blocks = self._read_blocks()
-        return blocks[-1]["block_hash"] if blocks else sha256(b"GENESIS")
+        return blocks[-1]["block_hash"] if blocks else h_block({"genesis": True})
 
     def append(self, payload: Dict[str, Any], signer: Dict[str, str], sig_b64: str) -> Dict[str, Any]:
         prev = self.tip_hash()
-        block_hash = sha256(prev.encode() + canonical(payload))
-        block = {
+        # Block hash covers full header: prev + payload + signer + sig
+        block_header = {
             "prev_hash": prev,
             "payload": payload,
             "signer": signer,
-            "sig": sig_b64,
-            "block_hash": block_hash
+            "sig": sig_b64
         }
+        block_hash = h_block(block_header)
+        block = {**block_header, "block_hash": block_hash}
         with open(self.path, "ab") as f:
             f.write(json.dumps(block, sort_keys=True, separators=(",", ":")).encode("utf-8") + b"\n")
         return block
 
     def verify(self) -> bool:
         blocks = self._read_blocks()
-        prev = sha256(b"GENESIS")
+        prev = h_block({"genesis": True})
         for b in blocks:
             payload = b["payload"]
-            # chain integrity
-            exp_hash = sha256(prev.encode() + canonical(payload))
+            signer = b["signer"]
+            sig = b["sig"]
+            
+            # Chain integrity: check block hash covers full header
+            block_header = {
+                "prev_hash": prev,
+                "payload": payload,
+                "signer": signer,
+                "sig": sig
+            }
+            exp_hash = h_block(block_header)
             if b["prev_hash"] != prev:
                 return False
             if b["block_hash"] != exp_hash:
                 return False
-            # signature integrity
-            pub_b64 = b["signer"]["ed25519_pub_pem_b64"]
+            
+            # Signature integrity
+            pub_b64 = signer["ed25519_pub_pem_b64"]
             pub_pem = __import__("base64").b64decode(pub_b64.encode("utf-8"))
-            if not verify_payload(pub_pem, payload, b["sig"]):
+            if not verify_payload(pub_pem, payload, sig):
                 return False
             prev = b["block_hash"]
         return True

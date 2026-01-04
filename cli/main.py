@@ -1,7 +1,7 @@
 from __future__ import annotations
 import argparse, os, json, time, base64
-from dna_ledger.hashing import sha256_file, chunk_hashes, merkle_root, sha256
-from dna_ledger.models import DatasetCommit, ConsentGrant, ComputeAttestation, ConsentRevocation, KeyRotationEvent
+from dna_ledger.hashing import sha256_file, chunk_hashes, merkle_root, sha256, h_commit
+from dna_ledger.models import DatasetCommit, ConsentGrant, ComputeAttestation, ConsentRevocation, KeyRotationEvent, KeyWrapEvent
 from dna_ledger.ledger import HashChainedLedger
 from dna_ledger.signing import gen_ed25519, sign_payload
 from vault.crypto import new_key, key_to_hex, key_from_hex
@@ -93,6 +93,22 @@ def active_grants(payloads: list[dict], dataset_id: str, purpose: str) -> list[d
         grants.append(p)
     return grants
 
+def latest_rotation(payloads: list[dict], dataset_id: str) -> str | None:
+    """Get the latest rotation_id for a dataset (or None if never rotated)."""
+    rots = [p for p in payloads if p.get("kind") == "KeyRotationEvent" and p["dataset_id"] == dataset_id]
+    return rots[-1]["rotation_id"] if rots else None
+
+def has_current_wrap(payloads: list[dict], dataset_id: str, grantee: str, purpose: str, rotation_id: str) -> bool:
+    """Check if grantee has a KeyWrapEvent for the current rotation."""
+    return any(
+        p.get("kind") == "KeyWrapEvent"
+        and p["dataset_id"] == dataset_id
+        and p["grantee"] == grantee
+        and p["purpose"] == purpose
+        and p["rotation_id"] == rotation_id
+        for p in payloads
+    )
+
 def cmd_init_identities(args):
     st = ensure_state(args.out)
     ids = load_identities(st["identities"])
@@ -126,24 +142,31 @@ def cmd_commit(args):
     root = merkle_root(ch)
 
     rec = DatasetCommit(owner=args.owner, bytes=n, sha256_plain=h_plain, chunk_hashes=ch, merkle_root=root)
+    
+    # Compute commit hash for binding grants to specific dataset version
+    rec_dict = rec.model_dump()
+    commit_hash = h_commit(rec_dict)
+    rec.commit_hash = commit_hash
+    rec_dict["commit_hash"] = commit_hash
 
-    # Generate a per-dataset vault key (DEK). In production you'd wrap it with owner key / multisig.
+    # Generate a per-dataset vault key (DEK)
     dek = new_key()
-    keys[rec.dataset_id] = {"dek_hex": key_to_hex(dek)}
+    keys[rec.dataset_id] = {"dek_hex": key_to_hex(dek), "commit_hash": commit_hash}
     save_keys(st["keys"], keys)
 
     # AAD binds dataset identity to vault ciphertext
-    aad = json.dumps({"dataset_id": rec.dataset_id, "sha256_plain": h_plain}, sort_keys=True).encode()
+    aad = json.dumps({"dataset_id": rec.dataset_id, "commit_hash": commit_hash, "vault_schema": "vault/v1"}, sort_keys=True).encode()
     data = open(args.dataset, "rb").read()
     vault_path = vault.put(rec.dataset_id, dek, data, aad)
 
     # Sign the commit
     signer, ed_priv = signer_bundle(ids, args.owner)
-    sig = sign_payload(ed_priv, rec.model_dump())
-    ledger.append(rec.model_dump(), signer=signer, sig_b64=sig)
+    sig = sign_payload(ed_priv, rec_dict)
+    ledger.append(rec_dict, signer=signer, sig_b64=sig)
 
     print("✅ Dataset committed + vaulted + signed")
     print(f"   dataset_id   : {rec.dataset_id}")
+    print(f"   commit_hash  : {commit_hash}")
     print(f"   sha256_plain : {h_plain}")
     print(f"   merkle_root  : {root}")
     print(f"   vault_blob   : {vault_path}")
@@ -156,22 +179,14 @@ def cmd_grant(args):
     ids = load_identities(st["identities"])
     keys = load_keys(st["keys"])
 
-    grant = ConsentGrant(
-        dataset_id=args.dataset_id,
-        grantee=args.grantee,
-        purpose=args.purpose,
-        scope=dict(kv.split("=", 1) for kv in (args.scope or [])),
-        expires_utc=iso_in_days(args.days),
-        revocable=not args.irrevocable,
-    )
-
     # signer = dataset owner (args.actor)
     signer, ed_priv = signer_bundle(ids, args.actor)
 
-    # locate dataset DEK
+    # locate dataset DEK + commit_hash
     if args.dataset_id not in keys:
         raise SystemExit(f"❌ Dataset not found: {args.dataset_id}")
     dek_hex = keys[args.dataset_id]["dek_hex"]
+    commit_hash = keys[args.dataset_id]["commit_hash"]
     dek = bytes.fromhex(dek_hex)
 
     # wrap DEK to grantee
@@ -183,21 +198,46 @@ def cmd_grant(args):
     grantee_x_pub = b64d(ids[args.grantee]["x25519_pub_pem_b64"])
 
     context = json.dumps(
-        {"dataset_id": args.dataset_id, "purpose": args.purpose, "grantee": args.grantee},
+        {"dataset_id": args.dataset_id, "commit_hash": commit_hash, "purpose": args.purpose, "grantee": args.grantee},
         sort_keys=True
     ).encode()
 
     wrapped = wrap_dek(owner_x_priv, grantee_x_pub, dek, context)
 
-    payload = grant.model_dump()
-    payload["wrapped_dek_b64"] = wrapped
-    payload["owner_x25519_pub_pem_b64"] = owner_x_pub_b64
+    # Create consent grant (includes initial wrapped DEK)
+    grant = ConsentGrant(
+        dataset_id=args.dataset_id,
+        dataset_commit_hash=commit_hash,
+        grantee=args.grantee,
+        purpose=args.purpose,
+        scope=dict(kv.split("=", 1) for kv in (args.scope or [])),
+        expires_utc=iso_in_days(args.days),
+        revocable=not args.irrevocable,
+        wrapped_dek_b64=wrapped,
+        owner_x25519_pub_pem_b64=owner_x_pub_b64
+    )
 
+    payload = grant.model_dump()
     sig = sign_payload(ed_priv, payload)
     ledger.append(payload, signer=signer, sig_b64=sig)
 
+    # Also emit initial KeyWrapEvent (append-only, no mutation)
+    wrap_evt = KeyWrapEvent(
+        dataset_id=args.dataset_id,
+        dataset_commit_hash=commit_hash,
+        grantee=args.grantee,
+        purpose=args.purpose,
+        rotation_id="initial",  # no rotation yet
+        wrapped_dek_b64=wrapped,
+        owner_x25519_pub_pem_b64=owner_x_pub_b64
+    )
+    wrap_payload = wrap_evt.model_dump()
+    sig_wrap = sign_payload(ed_priv, wrap_payload)
+    ledger.append(wrap_payload, signer=signer, sig_b64=sig_wrap)
+
     print("✅ Consent grant recorded + DEK wrapped to grantee")
     print(f"   grant_id    : {grant.grant_id}")
+    print(f"   wrap_id     : {wrap_evt.wrap_id}")
     print(f"   grantee     : {args.grantee}")
     print(f"   expires_utc : {grant.expires_utc}")
     print(f"   signer      : {args.actor}")
@@ -235,6 +275,9 @@ def cmd_rotate(args):
     payloads = ledger.all_payloads()
     signer, ed_priv = signer_bundle(ids, args.actor)
 
+    # Get commit hash
+    commit_hash = keys[args.dataset_id]["commit_hash"]
+
     # Generate new DEK
     new_dek = new_key()
     new_dek_sha = sha256(new_dek)
@@ -242,15 +285,11 @@ def cmd_rotate(args):
     # Load plaintext using OLD DEK
     old_dek = bytes.fromhex(keys[args.dataset_id]["dek_hex"])
     
-    # Find the dataset commit to get the sha256_plain for AAD
-    dataset_commit = next((p for p in payloads if p.get("kind") == "DatasetCommit" and p.get("dataset_id") == args.dataset_id), None)
-    if not dataset_commit:
-        raise SystemExit(f"❌ Dataset not found: {args.dataset_id}")
-    
-    aad = json.dumps({"dataset_id": args.dataset_id, "sha256_plain": dataset_commit["sha256_plain"]}, sort_keys=True).encode()
+    # AAD binds to commit hash and schema
+    aad = json.dumps({"dataset_id": args.dataset_id, "commit_hash": commit_hash, "vault_schema": "vault/v1"}, sort_keys=True).encode()
     plaintext = vault.get(args.dataset_id, old_dek, aad)
 
-    # Re-seal with NEW DEK
+    # Re-seal with NEW DEK (same AAD)
     vault.put(args.dataset_id, new_dek, plaintext, aad)
 
     # Update DEK storage
@@ -259,11 +298,12 @@ def cmd_rotate(args):
 
     # Record rotation event
     evt = KeyRotationEvent(dataset_id=args.dataset_id, new_dek_sha256=new_dek_sha)
-    sig = sign_payload(ed_priv, evt.model_dump())
-    ledger.append(evt.model_dump(), signer=signer, sig_b64=sig)
+    evt_payload = evt.model_dump()
+    sig = sign_payload(ed_priv, evt_payload)
+    ledger.append(evt_payload, signer=signer, sig_b64=sig)
 
-    # Re-wrap DEK to all ACTIVE grantees (for all purposes)
-    print(f"🔁 Re-wrapping DEK to active grantees...")
+    # Emit KeyWrapEvents (append-only, no mutation)
+    print(f"🔁 Emitting KeyWrapEvents for active grantees...")
     rewrap_count = 0
     for purpose in ["clinical", "ancestry", "research", "pharma", "ml_training"]:
         grants = active_grants(payloads, args.dataset_id, purpose)
@@ -274,7 +314,7 @@ def cmd_rotate(args):
                 continue
             
             context = json.dumps(
-                {"dataset_id": args.dataset_id, "purpose": purpose, "grantee": grantee},
+                {"dataset_id": args.dataset_id, "commit_hash": commit_hash, "purpose": purpose, "grantee": grantee},
                 sort_keys=True
             ).encode()
             
@@ -285,28 +325,26 @@ def cmd_rotate(args):
                 context
             )
             
-            # Create new grant with updated wrapped DEK (preserves original grant metadata)
-            updated_grant = ConsentGrant(
-                dataset_id=g["dataset_id"],
-                grantee=g["grantee"],
-                purpose=g["purpose"],
-                scope=g.get("scope", {}),
-                expires_utc=g["expires_utc"],
-                revocable=g.get("revocable", True)
+            # Emit KeyWrapEvent (append-only)
+            wrap_evt = KeyWrapEvent(
+                dataset_id=args.dataset_id,
+                dataset_commit_hash=commit_hash,
+                grantee=grantee,
+                purpose=purpose,
+                rotation_id=evt.rotation_id,
+                wrapped_dek_b64=wrapped,
+                owner_x25519_pub_pem_b64=ids[args.actor]["x25519_pub_pem_b64"]
             )
-            payload = updated_grant.model_dump()
-            payload["wrapped_dek_b64"] = wrapped
-            payload["owner_x25519_pub_pem_b64"] = ids[args.actor]["x25519_pub_pem_b64"]
-            payload["rotated_from"] = g["grant_id"]  # link to original
-            
-            sig_grant = sign_payload(ed_priv, payload)
-            ledger.append(payload, signer=signer, sig_b64=sig_grant)
+            wrap_payload = wrap_evt.model_dump()
+            sig_wrap = sign_payload(ed_priv, wrap_payload)
+            ledger.append(wrap_payload, signer=signer, sig_b64=sig_wrap)
             rewrap_count += 1
 
     print("🔁 Key rotation complete")
     print(f"   dataset_id   : {args.dataset_id}")
+    print(f"   rotation_id  : {evt.rotation_id}")
     print(f"   new_dek_sha  : {new_dek_sha}")
-    print(f"   rewrapped    : {rewrap_count} grants")
+    print(f"   wrap_events  : {rewrap_count}")
     print(f"   ledger_ok    : {ledger.verify()}")
 
 def cmd_attest(args):
@@ -314,11 +352,25 @@ def cmd_attest(args):
     ledger = HashChainedLedger(st["ledger"])
     ids = load_identities(st["identities"])
 
-    # POLICY ENFORCEMENT: check for valid, unrevoked consent grant
+    # SOLID POLICY ENFORCEMENT
     payloads = ledger.all_payloads()
+    
+    # 1. Check for active, unrevoked grant
     grants = active_grants(payloads, args.dataset_id, args.purpose)
-    if not any(g["grantee"] == args.actor for g in grants):
+    matching_grant = next((g for g in grants if g["grantee"] == args.actor), None)
+    if not matching_grant:
         raise SystemExit(f"❌ No active, unrevoked consent grant found for actor={args.actor}, dataset={args.dataset_id}, purpose={args.purpose}")
+    
+    # 2. Check wrap state (must have current wrap for latest rotation)
+    rot_id = latest_rotation(payloads, args.dataset_id)
+    if rot_id:
+        # Rotation exists, must have wrap for current rotation
+        if not has_current_wrap(payloads, args.dataset_id, args.actor, args.purpose, rot_id):
+            raise SystemExit(f"❌ No KeyWrapEvent found for actor={args.actor} at rotation_id={rot_id}")
+    else:
+        # No rotation yet, must have initial wrap
+        if not has_current_wrap(payloads, args.dataset_id, args.actor, args.purpose, "initial"):
+            raise SystemExit(f"❌ No initial KeyWrapEvent found for actor={args.actor}")
 
     algo_sha = sha256(args.algo.encode())
     out_sha, _ = sha256_file(args.result)

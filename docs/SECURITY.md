@@ -4,6 +4,71 @@ This document explains the cryptographic invariants and security properties of `
 
 ---
 
+## 🔒 SECURITY INVARIANTS (Audit-Grade)
+
+These are the **non-negotiable properties** that the system enforces. Any violation indicates compromise or implementation error.
+
+### 1. Append-Only Ledger
+**Invariant:** Ledger entries are never modified or deleted. All state changes emit new events.
+- ✅ Consent grants are never mutated
+- ✅ Revocations emit explicit `ConsentRevocation` events
+- ✅ Key rotation emits `KeyRotationEvent` + N×`KeyWrapEvent`
+- ❌ **VIOLATION:** Rewriting, deleting, or updating historical entries
+
+### 2. Block Hash Covers Full Header
+**Invariant:** `block_hash = H_BLOCK(prev_hash || payload || signer || sig)`
+- ✅ Prevents swapping signer metadata while keeping chain valid
+- ✅ Domain-separated hash (`H_BLOCK`) prevents structural collisions
+- ❌ **VIOLATION:** Block hash not covering signature/signer
+
+### 3. Domain-Separated Hashing
+**Invariant:** All hash operations use domain separation to prevent reinterpretation attacks.
+- `H_LEAF(chunk)` = `SHA256("DNALEAF\x00" || chunk)`
+- `H_NODE(L, R)` = `SHA256("DNANODE\x00" || L || R)`
+- `H_PAYLOAD(p)` = `SHA256("PAYLOAD\x00" || canonical(p))`
+- `H_BLOCK(b)` = `SHA256("BLOCK\x00" || canonical(b))`
+- `H_COMMIT(c)` = `SHA256("DATASETCOMMIT\x00" || canonical(c))`
+- ❌ **VIOLATION:** Using raw `SHA256(data)` without domain prefix
+
+### 4. Consent Validity Conditions
+**Invariant:** Compute attestation allowed ⟺ ALL of:
+1. Active `ConsentGrant` exists for `(dataset_id, grantee, purpose, dataset_commit_hash)`
+2. Grant is **not revoked** (`ConsentRevocation` does not exist for `grant_id`)
+3. Grant is **not expired** (`expires_utc > now()`)
+4. Grantee has `KeyWrapEvent` for **current rotation** (or "initial" if no rotation)
+
+- ❌ **VIOLATION:** Attesting without valid consent
+- ❌ **VIOLATION:** Attesting with revoked or expired grant
+- ❌ **VIOLATION:** Attesting without current `KeyWrapEvent`
+
+### 5. Post-Rotation Access Control
+**Invariant:** After key rotation, access requires current `KeyWrapEvent`.
+- `latest_rotation(dataset_id)` returns most recent `rotation_id`
+- Grantee must have `KeyWrapEvent` matching `rotation_id`
+- Revoked grantees do NOT receive new `KeyWrapEvent` (permanently excluded)
+- ❌ **VIOLATION:** Accepting stale wraps from previous rotations
+
+### 6. Dataset Commit Binding
+**Invariant:** Consent grants bind to specific dataset versions via `dataset_commit_hash`.
+- `commit_hash = H_COMMIT(DatasetCommit)`
+- `ConsentGrant.dataset_commit_hash` must match committed dataset
+- ❌ **VIOLATION:** Grant not bound to specific commit
+- ❌ **VIOLATION:** Reusing grant for different dataset version
+
+### 7. Vault AAD Binding
+**Invariant:** Vault ciphertext AAD binds to `(dataset_id, commit_hash, vault_schema)`.
+- AAD = `canonical({"dataset_id": "...", "commit_hash": "...", "vault_schema": "vault/v1"})`
+- Prevents ciphertext reuse across datasets
+- ❌ **VIOLATION:** Decrypting with mismatched AAD
+- ❌ **VIOLATION:** AAD not including commit_hash
+
+### 8. Signature Covers Versioned Payload
+**Invariant:** Signatures include schema version to prevent reinterpretation.
+- Sign: `{"schema": "dna-ledger-vault/payload/v1", "payload": <data>}`
+- ❌ **VIOLATION:** Signing raw payload without schema version (future work)
+
+---
+
 ## Core Principle: DNA Never Touches The Ledger
 
 **Threat:** DNA sequences are inherently identifying. Storing them on any shared ledger (blockchain or otherwise) creates irreversible privacy loss.

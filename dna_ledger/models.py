@@ -21,17 +21,21 @@ class DatasetCommit(BaseModel):
     sha256_plain: str
     merkle_root: str
     chunk_hashes: List[str]
+    commit_hash: Optional[str] = None  # computed after model creation
 
 class ConsentGrant(BaseModel):
     kind: Literal["ConsentGrant"] = "ConsentGrant"
     grant_id: str = Field(default_factory=lambda: new_id("cg"))
     created_utc: str = Field(default_factory=now_utc)
     dataset_id: str
+    dataset_commit_hash: str  # binds to specific dataset version
     grantee: str
     purpose: Purpose
     scope: Dict[str, str] = Field(default_factory=dict)  # freeform constraints
     expires_utc: str
     revocable: bool = True
+    wrapped_dek_b64: str  # initial wrap at grant time
+    owner_x25519_pub_pem_b64: str
 
 class ComputeAttestation(BaseModel):
     kind: Literal["ComputeAttestation"] = "ComputeAttestation"
@@ -57,3 +61,15 @@ class KeyRotationEvent(BaseModel):
     created_utc: str = Field(default_factory=now_utc)
     dataset_id: str
     new_dek_sha256: str
+
+class KeyWrapEvent(BaseModel):
+    kind: Literal["KeyWrapEvent"] = "KeyWrapEvent"
+    wrap_id: str = Field(default_factory=lambda: new_id("kw"))
+    created_utc: str = Field(default_factory=now_utc)
+    dataset_id: str
+    dataset_commit_hash: str
+    grantee: str
+    purpose: Purpose
+    rotation_id: str  # binds to specific rotation (or "initial" for first wrap)
+    wrapped_dek_b64: str
+    owner_x25519_pub_pem_b64: str
