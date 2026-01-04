@@ -1,0 +1,68 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dna-ledger-vault"
+version = "0.2.0"
+description = "Cryptographically-verified genomic data ledger with off-chain encrypted vault"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [
+    {name = "DNA Ledger Vault Contributors"}
+]
+keywords = ["genomics", "cryptography", "ledger", "blockchain", "privacy", "consent"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "Intended Audience :: Healthcare Industry",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Security :: Cryptography",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+]
+
+dependencies = [
+    "cryptography>=42.0.0,<44.0.0",
+    "pydantic>=2.0.0,<3.0.0",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest>=7.4.0,<9.0.0",
+]
+dev = [
+    "pytest>=7.4.0,<9.0.0",
+    "ruff>=0.1.0",
+    "mypy>=1.7.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/FractalFuryan/dna-ledger-vault"
+Documentation = "https://github.com/FractalFuryan/dna-ledger-vault/blob/main/docs/AUDIT.md"
+Repository = "https://github.com/FractalFuryan/dna-ledger-vault"
+Issues = "https://github.com/FractalFuryan/dna-ledger-vault/issues"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["dna_ledger*", "vault*", "cli*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short"
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+ignore_missing_imports = true
