@@ -42,3 +42,18 @@ class ComputeAttestation(BaseModel):
     algo_name: str
     algo_sha256: str
     output_sha256: str
+
+class ConsentRevocation(BaseModel):
+    kind: Literal["ConsentRevocation"] = "ConsentRevocation"
+    revocation_id: str = Field(default_factory=lambda: new_id("cr"))
+    created_utc: str = Field(default_factory=now_utc)
+    dataset_id: str
+    grant_id: str
+    reason: Optional[str] = None
+
+class KeyRotationEvent(BaseModel):
+    kind: Literal["KeyRotationEvent"] = "KeyRotationEvent"
+    rotation_id: str = Field(default_factory=lambda: new_id("kr"))
+    created_utc: str = Field(default_factory=now_utc)
+    dataset_id: str
+    new_dek_sha256: str

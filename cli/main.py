@@ -1,7 +1,7 @@
 from __future__ import annotations
 import argparse, os, json, time, base64
 from dna_ledger.hashing import sha256_file, chunk_hashes, merkle_root, sha256
-from dna_ledger.models import DatasetCommit, ConsentGrant, ComputeAttestation
+from dna_ledger.models import DatasetCommit, ConsentGrant, ComputeAttestation, ConsentRevocation, KeyRotationEvent
 from dna_ledger.ledger import HashChainedLedger
 from dna_ledger.signing import gen_ed25519, sign_payload
 from vault.crypto import new_key, key_to_hex, key_from_hex
@@ -68,6 +68,30 @@ def find_valid_grant(payloads: list[dict], dataset_id: str, grantee: str, purpos
         and p.get("expires_utc", "") > now
     ]
     return candidates[-1] if candidates else None
+
+def is_grant_revoked(payloads: list[dict], grant_id: str) -> bool:
+    return any(
+        p.get("kind") == "ConsentRevocation" and p.get("grant_id") == grant_id
+        for p in payloads
+    )
+
+def active_grants(payloads: list[dict], dataset_id: str, purpose: str) -> list[dict]:
+    """Get all active, unrevoked grants for a dataset + purpose."""
+    now = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    grants = []
+    for p in payloads:
+        if p.get("kind") != "ConsentGrant":
+            continue
+        if p["dataset_id"] != dataset_id:
+            continue
+        if p["purpose"] != purpose:
+            continue
+        if p["expires_utc"] <= now:
+            continue
+        if is_grant_revoked(payloads, p["grant_id"]):
+            continue
+        grants.append(p)
+    return grants
 
 def cmd_init_identities(args):
     st = ensure_state(args.out)
@@ -179,16 +203,122 @@ def cmd_grant(args):
     print(f"   signer      : {args.actor}")
     print(f"   ledger_ok   : {ledger.verify()}")
 
+def cmd_revoke(args):
+    st = ensure_state(args.out)
+    ledger = HashChainedLedger(st["ledger"])
+    ids = load_identities(st["identities"])
+
+    signer, ed_priv = signer_bundle(ids, args.actor)
+
+    rev = ConsentRevocation(
+        dataset_id=args.dataset_id,
+        grant_id=args.grant_id,
+        reason=args.reason
+    )
+
+    sig = sign_payload(ed_priv, rev.model_dump())
+    ledger.append(rev.model_dump(), signer=signer, sig_b64=sig)
+
+    print("🛑 Consent revoked")
+    print(f"   grant_id     : {args.grant_id}")
+    print(f"   revocation_id: {rev.revocation_id}")
+    print(f"   signer       : {args.actor}")
+    print(f"   ledger_ok    : {ledger.verify()}")
+
+def cmd_rotate(args):
+    st = ensure_state(args.out)
+    ledger = HashChainedLedger(st["ledger"])
+    vault = Vault(st["vault"])
+    ids = load_identities(st["identities"])
+    keys = load_keys(st["keys"])
+
+    payloads = ledger.all_payloads()
+    signer, ed_priv = signer_bundle(ids, args.actor)
+
+    # Generate new DEK
+    new_dek = new_key()
+    new_dek_sha = sha256(new_dek)
+
+    # Load plaintext using OLD DEK
+    old_dek = bytes.fromhex(keys[args.dataset_id]["dek_hex"])
+    
+    # Find the dataset commit to get the sha256_plain for AAD
+    dataset_commit = next((p for p in payloads if p.get("kind") == "DatasetCommit" and p.get("dataset_id") == args.dataset_id), None)
+    if not dataset_commit:
+        raise SystemExit(f"❌ Dataset not found: {args.dataset_id}")
+    
+    aad = json.dumps({"dataset_id": args.dataset_id, "sha256_plain": dataset_commit["sha256_plain"]}, sort_keys=True).encode()
+    plaintext = vault.get(args.dataset_id, old_dek, aad)
+
+    # Re-seal with NEW DEK
+    vault.put(args.dataset_id, new_dek, plaintext, aad)
+
+    # Update DEK storage
+    keys[args.dataset_id]["dek_hex"] = key_to_hex(new_dek)
+    save_keys(st["keys"], keys)
+
+    # Record rotation event
+    evt = KeyRotationEvent(dataset_id=args.dataset_id, new_dek_sha256=new_dek_sha)
+    sig = sign_payload(ed_priv, evt.model_dump())
+    ledger.append(evt.model_dump(), signer=signer, sig_b64=sig)
+
+    # Re-wrap DEK to all ACTIVE grantees (for all purposes)
+    print(f"🔁 Re-wrapping DEK to active grantees...")
+    rewrap_count = 0
+    for purpose in ["clinical", "ancestry", "research", "pharma", "ml_training"]:
+        grants = active_grants(payloads, args.dataset_id, purpose)
+        for g in grants:
+            grantee = g["grantee"]
+            if grantee not in ids:
+                print(f"   ⚠️  Skipping unknown grantee: {grantee}")
+                continue
+            
+            context = json.dumps(
+                {"dataset_id": args.dataset_id, "purpose": purpose, "grantee": grantee},
+                sort_keys=True
+            ).encode()
+            
+            wrapped = wrap_dek(
+                b64d(ids[args.actor]["x25519_priv_pem_b64"]),
+                b64d(ids[grantee]["x25519_pub_pem_b64"]),
+                new_dek,
+                context
+            )
+            
+            # Create new grant with updated wrapped DEK (preserves original grant metadata)
+            updated_grant = ConsentGrant(
+                dataset_id=g["dataset_id"],
+                grantee=g["grantee"],
+                purpose=g["purpose"],
+                scope=g.get("scope", {}),
+                expires_utc=g["expires_utc"],
+                revocable=g.get("revocable", True)
+            )
+            payload = updated_grant.model_dump()
+            payload["wrapped_dek_b64"] = wrapped
+            payload["owner_x25519_pub_pem_b64"] = ids[args.actor]["x25519_pub_pem_b64"]
+            payload["rotated_from"] = g["grant_id"]  # link to original
+            
+            sig_grant = sign_payload(ed_priv, payload)
+            ledger.append(payload, signer=signer, sig_b64=sig_grant)
+            rewrap_count += 1
+
+    print("🔁 Key rotation complete")
+    print(f"   dataset_id   : {args.dataset_id}")
+    print(f"   new_dek_sha  : {new_dek_sha}")
+    print(f"   rewrapped    : {rewrap_count} grants")
+    print(f"   ledger_ok    : {ledger.verify()}")
+
 def cmd_attest(args):
     st = ensure_state(args.out)
     ledger = HashChainedLedger(st["ledger"])
     ids = load_identities(st["identities"])
 
-    # POLICY ENFORCEMENT: check for valid consent grant
+    # POLICY ENFORCEMENT: check for valid, unrevoked consent grant
     payloads = ledger.all_payloads()
-    grant = find_valid_grant(payloads, args.dataset_id, args.actor, args.purpose)
-    if not grant:
-        raise SystemExit(f"❌ No valid consent grant found for actor={args.actor}, dataset={args.dataset_id}, purpose={args.purpose}")
+    grants = active_grants(payloads, args.dataset_id, args.purpose)
+    if not any(g["grantee"] == args.actor for g in grants):
+        raise SystemExit(f"❌ No active, unrevoked consent grant found for actor={args.actor}, dataset={args.dataset_id}, purpose={args.purpose}")
 
     algo_sha = sha256(args.algo.encode())
     out_sha, _ = sha256_file(args.result)
@@ -260,13 +390,26 @@ def main():
     a.add_argument("--result", required=True)
     a.set_defaults(func=cmd_attest)
 
+    # revoke-consent
+    r = sub.add_parser("revoke-consent", help="Revoke a consent grant")
+    r.add_argument("--out", required=True)
+    r.add_argument("--actor", required=True, help="Dataset owner revoking consent")
+    r.add_argument("--dataset-id", required=True)
+    r.add_argument("--grant-id", required=True)
+    r.add_argument("--reason", help="Reason for revocation")
+    r.set_defaults(func=cmd_revoke)
+
+    # rotate-key
+    k = sub.add_parser("rotate-key", help="Rotate dataset encryption key")
+    k.add_argument("--out", required=True)
+    k.add_argument("--actor", required=True, help="Dataset owner performing rotation")
+    k.add_argument("--dataset-id", required=True)
+    k.set_defaults(func=cmd_rotate)
+
     # verify
     v = sub.add_parser("verify", help="Verify ledger integrity")
     v.add_argument("--out", required=True)
     v.set_defaults(func=cmd_verify)
-
-    args = p.parse_args()
-    args.func(args)
 
     args = p.parse_args()
     args.func(args)
