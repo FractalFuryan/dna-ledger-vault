@@ -53,6 +53,9 @@ jobs:
       
       - name: Check schema versioning
         run: |
+          # Install package for imports to work
+          pip install -e .
+          
           # Verify all payloads have schema field
           python -c "
           import json
@@ -82,11 +85,15 @@ jobs:
         with:
           python-version: '3.11'
       
-      - name: Install linting tools
+      - name: Install package dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install ruff mypy
           pip install -r requirements.txt
+          pip install -e .
+      
+      - name: Install linting tools
+        run: |
+          pip install ruff mypy
       
       - name: Run ruff (linter)
         run: |
@@ -115,6 +122,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+          pip install -e .
       
       - name: Run pip audit
         run: |
