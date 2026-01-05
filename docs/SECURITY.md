@@ -382,5 +382,33 @@ Replace local ledger with Ethereum/Solana for decentralized verification.
 
 ---
 
-**Last updated:** January 4, 2026  
-**Version:** vNext.1 (Revocation + Key Rotation)
+## Dependency Integrity
+
+All cryptographic and validation dependencies are **version-bounded** to ensure stability and reproducibility.
+
+**Dependency Management:**
+- `requirements.txt`: Bounded version ranges (e.g., `cryptography>=42.0.0,<47.0.0`)
+- `requirements-lock.txt`: Frozen snapshot of exact versions used in audit builds
+- `pyproject.toml`: Package metadata with bounded dependencies
+
+**Audit Reproducibility:**
+```bash
+pip install -r requirements-lock.txt  # Exact audit environment
+pytest tests/ -v                       # Run all invariant tests
+```
+
+This ensures:
+- ✅ Builds are reproducible across environments
+- ✅ Security patches can be validated against frozen state
+- ✅ Auditors can verify exact dependency tree
+- ✅ No silent breakage from upstream releases
+
+**Dependency Update Policy:**
+- Security patches: Apply immediately, update lock file
+- Minor versions: Review changelog, test invariants, update bounds
+- Major versions: Full audit review before upgrade
+
+---
+
+**Last updated:** January 5, 2026  
+**Version:** vNext.2 (BLAKE3 + Scheme Versioning + Merkle Proofs)

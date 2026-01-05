@@ -1,9 +1,12 @@
 # DNA Ledger Vault - Pinned Dependencies for Reproducible Builds
-# Updated: 2026-01-04
+# Updated: 2026-01-05
 
 # Core cryptography (pinned for audit reproducibility)
-cryptography>=42.0.0,<44.0.0  # Ed25519, X25519, ChaCha20-Poly1305
+cryptography>=42.0.0,<47.0.0  # Ed25519, X25519, ChaCha20-Poly1305
 pydantic>=2.0.0,<3.0.0        # Type-safe data validation
+blake3>=0.4.0,<1.0.0          # Fast parallel hashing
 
-# Test dependencies
-pytest>=7.4.0,<9.0.0
+# Development dependencies (testing + static analysis)
+pytest>=8.0.0,<9.0.0          # Test framework
+ruff>=0.5.0,<1.0.0            # Fast Python linter
+mypy>=1.10.0,<2.0.0           # Static type checker
