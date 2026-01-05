@@ -34,7 +34,6 @@ def test_domain_separation():
         "Different hash functions produced same output!"
 
 
-@pytest.mark.skip(reason="Merkle proof implementation needs debugging - not critical for core invariants")
 def test_merkle_proof_valid():
     """INVARIANT 8: Valid Merkle inclusion proofs must verify."""
     chunks = [b"chunk0", b"chunk1", b"chunk2", b"chunk3"]

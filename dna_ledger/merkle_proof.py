@@ -19,27 +19,36 @@ def merkle_proof(index: int, leaves: List[str]) -> List[Tuple[str, str]]:
     
     while len(level) > 1:
         nxt = []
-        it = iter(level)
-        level_idx = 0
+        pairs = []
         
+        # Build pairs for this level
+        it = iter(level)
         for a in it:
             b = next(it, a)  # duplicate last if odd
-            if level_idx == idx:
-                # Current node is a, sibling is b
-                if a != b:  # not duplicated
-                    proof.append((b, 'R'))
-                idx = level_idx // 2
-            elif level_idx == idx - 1:
-                # Current node is b, sibling is a
-                proof.append((a, 'L'))
-                idx = level_idx // 2
-            else:
-                idx = idx // 2
-            
-            nxt.append(h_node(a, b))
-            level_idx += 2
+            pairs.append((a, b))
         
+        # Find which pair contains our target index
+        pair_idx = idx // 2
+        pos_in_pair = idx % 2
+        
+        # Add sibling to proof
+        if pair_idx < len(pairs):
+            a, b = pairs[pair_idx]
+            if pos_in_pair == 0:
+                # Target is 'a', sibling is 'b' on the right
+                if a != b:  # not a duplicated node
+                    proof.append((b, 'R'))
+            else:
+                # Target is 'b', sibling is 'a' on the left
+                proof.append((a, 'L'))
+        
+        # Build next level
+        for a, b in pairs:
+            nxt.append(h_node(a, b))
+        
+        # Move up to next level
         level = nxt
+        idx = pair_idx
     
     return proof
 
