@@ -142,13 +142,13 @@ jobs:
         run: |
           # Check all 8 invariants documented
           grep -q "1. Append-Only Ledger" docs/SECURITY.md
-          grep -q "2. Full Block Header Hashing" docs/SECURITY.md
+          grep -q "2. Block Hash Covers Full Header" docs/SECURITY.md
           grep -q "3. Domain-Separated Hashing" docs/SECURITY.md
-          grep -q "4. Dataset Commit Binding" docs/SECURITY.md
-          grep -q "5. Wrap State Enforcement" docs/SECURITY.md
-          grep -q "6. Vault AAD Binding" docs/SECURITY.md
-          grep -q "7. Signature Versioning" docs/SECURITY.md
-          grep -q "8. Merkle Inclusion Proofs" docs/SECURITY.md
+          grep -q "4. Consent Validity Conditions" docs/SECURITY.md
+          grep -q "5. Post-Rotation Access Control" docs/SECURITY.md
+          grep -q "6. Dataset Commit Binding" docs/SECURITY.md
+          grep -q "7. Vault AAD Binding" docs/SECURITY.md
+          grep -q "8. Signature Covers Versioned Payload" docs/SECURITY.md
           echo "✅ All 8 invariants documented"
       
       - name: Verify AUDIT.md completeness
