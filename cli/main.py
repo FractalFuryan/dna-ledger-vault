@@ -8,9 +8,11 @@ import time
 from typing import Any, cast
 
 from dna_ledger.hashing import (
+    blake3_file,
     chunk_hashes,
     h_commit,
     merkle_root,
+    merkle_root_blake3,
     sha256,
     sha256_file,
 )
@@ -265,11 +267,23 @@ def cmd_commit(args):
     keys = load_keys(st["keys"])
     ids = load_identities(st["identities"])
 
+    # Dual hashing: SHA-256 (canonical) + BLAKE3 (performance)
     h_plain, n = sha256_file(args.dataset)
+    h_blake3, _ = blake3_file(args.dataset)
     ch = chunk_hashes(args.dataset)
     root = merkle_root(ch)
+    root_blake3 = merkle_root_blake3(ch)
 
-    rec = DatasetCommit(owner=args.owner, bytes=n, sha256_plain=h_plain, chunk_hashes=ch, merkle_root=root)
+    rec = DatasetCommit(
+        owner=args.owner,
+        bytes=n,
+        sha256_plain=h_plain,
+        blake3_plain=h_blake3,
+        chunk_hashes=ch,
+        merkle_root=root,
+        merkle_root_blake3=root_blake3,
+        hash_scheme="dual",  # Both SHA-256 and BLAKE3
+    )
     
     # Compute commit hash for binding grants to specific dataset version
     rec_dict = rec.model_dump(by_alias=True)
@@ -296,7 +310,9 @@ def cmd_commit(args):
     print(f"   dataset_id   : {rec.dataset_id}")
     print(f"   commit_hash  : {commit_hash}")
     print(f"   sha256_plain : {h_plain}")
+    print(f"   blake3_plain : {h_blake3}")
     print(f"   merkle_root  : {root}")
+    print(f"   merkle_blake3: {root_blake3}")
     print(f"   vault_blob   : {vault_path}")
     print(f"   signer       : {args.owner}")
     print(f"   ledger_ok    : {ledger.verify()}")

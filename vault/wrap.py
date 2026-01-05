@@ -45,6 +45,14 @@ def wrap_dek(
     dek: bytes,
     context: bytes,
 ) -> str:
+    """
+    Wrap DEK with X25519 ECDH + HKDF + ChaCha20-Poly1305.
+    
+    Scheme: x25519-hkdf-chacha20poly1305-v1
+    - X25519 ECDH for shared secret
+    - HKDF-SHA256 for key derivation with context binding
+    - ChaCha20-Poly1305 AEAD (96-bit nonce, safe with key rotation)
+    """
     owner_priv = load_pem_private_key(owner_x25519_priv_pem, password=None)
     grantee_pub = load_pem_public_key(grantee_x25519_pub_pem)
     if not isinstance(owner_priv, X25519PrivateKey) or not isinstance(grantee_pub, X25519PublicKey):
@@ -52,7 +60,7 @@ def wrap_dek(
     shared = owner_priv.exchange(grantee_pub)
     wk = _derive_wrap_key(shared, context)
     aead = ChaCha20Poly1305(wk)
-    nonce = os.urandom(12)
+    nonce = os.urandom(12)  # 96-bit nonce
     ct = aead.encrypt(nonce, dek, context)
     return b64e(nonce + ct)
 
@@ -62,6 +70,7 @@ def unwrap_dek(
     wrapped_b64: str,
     context: bytes,
 ) -> bytes:
+    """Unwrap DEK with X25519 ECDH + HKDF + ChaCha20-Poly1305."""
     grantee_priv = load_pem_private_key(grantee_x25519_priv_pem, password=None)
     owner_pub = load_pem_public_key(owner_x25519_pub_pem)
     if not isinstance(grantee_priv, X25519PrivateKey) or not isinstance(owner_pub, X25519PublicKey):
@@ -69,6 +78,6 @@ def unwrap_dek(
     shared = grantee_priv.exchange(owner_pub)
     wk = _derive_wrap_key(shared, context)
     blob = b64d(wrapped_b64)
-    nonce, ct = blob[:12], blob[12:]
+    nonce, ct = blob[:12], blob[12:]  # 96-bit nonce
     aead = ChaCha20Poly1305(wk)
     return aead.decrypt(nonce, ct, context)

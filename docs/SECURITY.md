@@ -55,6 +55,13 @@ These are the **non-negotiable properties** that the system enforces. Any violat
 - ❌ **VIOLATION:** Grant not bound to specific commit
 - ❌ **VIOLATION:** Reusing grant for different dataset version
 
+**Dual Hashing (SHA-256 + BLAKE3):**
+- **SHA-256:** Canonical hash for universal interoperability (backwards compatible)
+- **BLAKE3:** Supplemental hash for performance (3-5× faster, parallel-friendly)
+- Both stored in `DatasetCommit` for future-proof verification
+- Domain separation prevents structural collision attacks
+- Hash scheme versioning: `hash_scheme: "dual"` in ledger payloads
+
 ### 7. Vault AAD Binding
 **Invariant:** Vault ciphertext AAD binds to `(dataset_id, commit_hash, vault_schema)`.
 - AAD = `canonical({"dataset_id": "...", "commit_hash": "...", "vault_schema": "vault/v1"})`
@@ -145,30 +152,37 @@ pub.verify(sig, canonical(payload))  # raises if invalid
 
 ### 3. Vault Encryption (ChaCha20-Poly1305 AEAD)
 
-DNA datasets are encrypted with **authenticated encryption** (AEAD).
+DNA datasets are encrypted with **authenticated encryption** (AEAD) using **ChaCha20-Poly1305**.
 
 **Construction:**
-- **Algorithm:** ChaCha20-Poly1305 (IETF standard)
+- **Algorithm:** ChaCha20-Poly1305 (IETF RFC 8439)
 - **Key:** 256-bit DEK (data encryption key), generated per dataset
-- **Nonce:** 96-bit random (unique per encryption)
+- **Nonce:** 96-bit random (12 bytes)
 - **AAD:** Additional authenticated data (binds dataset ID + hash)
+- **Scheme:** `chacha20poly1305-v1` (versioned for future upgrades)
+
+**Key rotation strategy ensures nonce safety:**
+- New DEK generated per dataset (never reused)
+- Key rotation on access revocation (forward secrecy)
+- AAD binding prevents ciphertext reinterpretation across contexts
 
 **Encryption:**
 ```python
 aead = ChaCha20Poly1305(dek)
-nonce = os.urandom(12)
+nonce = os.urandom(12)  # 96-bit nonce
 ciphertext = aead.encrypt(nonce, plaintext, aad)
 sealed_blob = nonce || ciphertext
 ```
 
 **Properties:**
 - **Confidentiality:** Plaintext hidden without DEK
-- **Authenticity:** Tampering detected via MAC
+- **Authenticity:** Tampering detected via Poly1305 MAC
 - **Context binding:** AAD ties ciphertext to specific dataset
+- **Nonce safety:** Key rotation eliminates reuse risk
 
 **Decryption:**
 ```python
-nonce, ct = blob[:12], blob[12:]
+nonce, ct = blob[:12], blob[12:]  # 96-bit nonce
 plaintext = aead.decrypt(nonce, ct, aad)  # raises on tampering
 ```
 
@@ -178,7 +192,7 @@ plaintext = aead.decrypt(nonce, ct, aad)  # raises on tampering
 
 DEKs are **wrapped** (encrypted) to grantee public keys using Diffie-Hellman key agreement.
 
-**Protocol:**
+**Protocol (x25519-hkdf-chacha20poly1305-v1):**
 1. Owner has X25519 keypair `(priv_owner, pub_owner)`
 2. Grantee has X25519 keypair `(priv_grantee, pub_grantee)`
 3. Compute ECDH shared secret: `shared = priv_owner ⊗ pub_grantee`
@@ -189,6 +203,7 @@ DEKs are **wrapped** (encrypted) to grantee public keys using Diffie-Hellman key
 - **No shared secrets:** Owner and grantee never exchange keys directly
 - **Forward secrecy:** Compromise of long-term keys doesn't reveal past DEKs
 - **Context binding:** `context` includes dataset_id + purpose + grantee identity
+- **Scheme versioning:** Future upgrades (e.g., HPKE, PQ hybrid) without breaking verification
 
 **Unwrapping (by grantee):**
 ```python
@@ -287,9 +302,15 @@ This system relies on:
 
 1. **Ed25519** (EdDSA): Secure signatures (Curve25519)
 2. **X25519** (ECDH): Secure key agreement (Curve25519)
-3. **SHA-256**: Collision-resistant hashing
-4. **ChaCha20-Poly1305**: Authenticated encryption (IETF RFC 8439)
-5. **HKDF-SHA256**: Key derivation (RFC 5869)
+3. **SHA-256**: Collision-resistant hashing (canonical, interoperable)
+4. **BLAKE3**: Fast, parallel hash function (supplemental for performance)
+5. **ChaCha20-Poly1305**: Authenticated encryption (IETF RFC 8439)
+6. **HKDF-SHA256**: Key derivation (RFC 5869)
+
+**Crypto scheme versioning:**
+- `wrap_scheme: "x25519-hkdf-chacha20poly1305-v1"` in key wrapping events
+- `hash_scheme: "dual"` (SHA-256 + BLAKE3) in dataset commits
+- Future-proof: allows clean primitive upgrades (HPKE, PQ hybrid) without breaking verification
 
 All primitives use **well-vetted implementations** from Python's `cryptography` library.
 

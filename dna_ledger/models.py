@@ -34,8 +34,11 @@ class DatasetCommit(BaseModel):
     owner: str
     bytes: int
     sha256_plain: str
-    merkle_root: str
+    blake3_plain: Optional[str] = None  # Forward-leaning hash for performance
+    merkle_root: str  # SHA-256 Merkle root (canonical)
+    merkle_root_blake3: Optional[str] = None  # BLAKE3 Merkle root (supplemental)
     chunk_hashes: List[str]
+    hash_scheme: str = "sha256"  # "sha256" | "blake3" | "dual"
     commit_hash: Optional[str] = None  # computed after model creation
     
     model_config = {"populate_by_name": True}
@@ -54,6 +57,7 @@ class ConsentGrant(BaseModel):
     revocable: bool = True
     wrapped_dek_b64: str  # initial wrap at grant time
     owner_x25519_pub_pem_b64: str
+    wrap_scheme: str = "x25519-hkdf-chacha20poly1305-v1"  # Crypto scheme version
     
     model_config = {"populate_by_name": True}
 
@@ -103,5 +107,6 @@ class KeyWrapEvent(BaseModel):
     rotation_id: str  # binds to specific rotation (or "initial" for first wrap)
     wrapped_dek_b64: str
     owner_x25519_pub_pem_b64: str
+    wrap_scheme: str = "x25519-hkdf-chacha20poly1305-v1"  # Crypto scheme version
     
     model_config = {"populate_by_name": True}
