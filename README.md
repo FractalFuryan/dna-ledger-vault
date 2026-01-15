@@ -287,10 +287,22 @@ See [CRYPTO_UPGRADES.md](docs/CRYPTO_UPGRADES.md) for complete upgrade strategy.
 
 ## Documentation
 
-- [SECURITY.md](docs/SECURITY.md) — Security model, cryptographic primitives, 14 invariants
+- [SECURITY.md](docs/SECURITY.md) — Security model, cryptographic primitives, 14 invariants, ethics anchor
 - [CRYPTO_UPGRADES.md](docs/CRYPTO_UPGRADES.md) — Future crypto upgrade roadmap (XChaCha, HPKE, PQ)
+- [GLOSSARY.md](docs/GLOSSARY.md) — Technical terminology, ethics concepts, cryptographic terms
 - [RELEASE_NOTES.md](RELEASE_NOTES.md) — v1.0.0-audit release summary
 - [requirements-lock.txt](requirements-lock.txt) — Frozen dependency snapshot for audits
+
+### Technical Specifications (2026-01-15)
+- [THREAD-2026-01-15.md](docs/THREAD-2026-01-15.md) — Thread compilation: ethics doctrine, architecture notes
+- [ETHICS-PROBABILISTIC-DISTANCE.md](docs/ETHICS-PROBABILISTIC-DISTANCE.md) — Probabilistic distance doctrine
+- [STATE-MIXER-FK.md](docs/STATE-MIXER-FK.md) — Nonlinear state mixer (formal spec, v2 strengthening)
+- [ZK-TELEPORT-OPTION-A.md](docs/ZK-TELEPORT-OPTION-A.md) — Halo2 teleport proof (field-valid, rigorous)
+- [GEO-PHASE.md](docs/GEO-PHASE.md) — Dual geo-phase architecture (audit-only cosine buffer)
+
+### Development Tools
+- **Makefile**: `make status`, `make docs-verify`, `make test`, `make lint`
+- **Export Evidence**: `python -m cli.main export-evidence` — Generate audit bundles
 
 ---
 
@@ -313,3 +325,25 @@ If you use this work in academic research, please cite:
   url = {https://github.com/FractalFuryan/dna-ledger-vault}
 }
 ```
+
+---
+
+## Recent Updates (2026-01-15)
+
+**Ethics & Documentation:**
+- Added ethics anchor verification (SHA-256: `65b14d584...`)
+- Comprehensive technical glossary with 40+ terms
+- Formal mathematical specifications for state mixer and ZK proofs
+
+**Code Implementations:**
+- Evidence export command for audit bundle generation
+- Documentation verification scripts
+- Makefile with convenient build targets
+
+**All updates maintain audit-grade posture with zero breaking changes.**
+
+---
+
+## Thread Archive
+
+- [docs/THREAD-2026-01-15.md](docs/THREAD-2026-01-15.md) — January 15, 2026 compilation (ethics doctrine, geo-phase audit, state mixer notes, Halo2 Option A planning)

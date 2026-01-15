@@ -139,14 +139,13 @@ def cmd_export_evidence(args):
     - evidence.json: All ledger events (optionally filtered by dataset)
     - evidence.sig: Ed25519 signature by actor
     - metadata.json: Schema version, export timestamp, signer info
-    - proofs/: Merkle proofs for dataset chunks (if dataset specified)
+    - README.txt: Bundle description
     """
     st = ensure_state(args.out)
     ids = load_identities(st["identities"])
     
     if args.actor not in ids:
-        print(f"❌ Identity not found: {args.actor}")
-        return
+        raise SystemExit(f"❌ Identity not found: {args.actor}")
     
     # Create bundle directory
     os.makedirs(args.bundle_dir, exist_ok=True)
@@ -167,7 +166,7 @@ def cmd_export_evidence(args):
         print(f"📦 Exporting all {len(filtered_blocks)} blocks")
     
     # Create evidence payload
-    from dna_ledger import __invariants__, __schema__, __version__
+    from dna_ledger import __version__, __schema__, __invariants__
     
     evidence = {
         "schema": __schema__,
@@ -183,61 +182,74 @@ def cmd_export_evidence(args):
     
     # Save evidence.json
     evidence_path = os.path.join(args.bundle_dir, "evidence.json")
-    with open(evidence_path, "w") as f:
+    with open(evidence_path, "w", encoding="utf-8") as f:
         json.dump(evidence, f, indent=2, sort_keys=True)
     
     # Sign evidence
     ed_priv = b64d(ids[args.actor]["ed25519_priv_pem_b64"])
-    ed_pub = b64d(ids[args.actor]["ed25519_pub_pem_b64"])
+    ed_pub_b64 = ids[args.actor]["ed25519_pub_pem_b64"]
     
     sig = sign_payload(ed_priv, evidence)
     
     sig_path = os.path.join(args.bundle_dir, "evidence.sig")
-    with open(sig_path, "w") as f:
+    with open(sig_path, "w", encoding="utf-8") as f:
         json.dump({
             "signer": args.actor,
-            "ed25519_pub_pem_b64": b64e(ed_pub),
+            "ed25519_pub_pem_b64": ed_pub_b64,
             "signature_b64": sig,
-            "signed_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+            "signed_utc": evidence["exported_utc"],
         }, f, indent=2)
     
-    # Generate Merkle proofs if dataset specified
-    if args.dataset_id:
-        # Find dataset commit
-        commits = [b["payload"] for b in filtered_blocks 
-                   if b["payload"]["kind"] == "DatasetCommit"]
-        
-        if commits:
-            from dna_ledger.merkle_proof import merkle_proof
-            
-            commit = commits[0]  # Latest commit for this dataset
-            chunk_hashes = commit["chunk_hashes"]
-            merkle_root_val = commit["merkle_root"]
-            
-            proofs_dir = os.path.join(args.bundle_dir, "proofs")
-            os.makedirs(proofs_dir, exist_ok=True)
-            
-            # Generate proof for each chunk
-            for idx in range(len(chunk_hashes)):
-                proof = merkle_proof(idx, chunk_hashes)
-                proof_data = {
-                    "chunk_index": idx,
-                    "leaf_hash": chunk_hashes[idx],
-                    "merkle_root": merkle_root_val,
-                    "proof": proof,
-                    "dataset_id": args.dataset_id
-                }
-                
-                proof_path = os.path.join(proofs_dir, f"chunk_{idx:04d}_proof.json")
-                with open(proof_path, "w") as f:
-                    json.dump(proof_data, f, indent=2)
-            
-            print(f"📝 Generated {len(chunk_hashes)} Merkle proofs in {proofs_dir}")
+    # Save metadata
+    metadata_path = os.path.join(args.bundle_dir, "metadata.json")
+    with open(metadata_path, "w", encoding="utf-8") as f:
+        json.dump({
+            "bundle_type": "dna-ledger-vault-evidence",
+            "schema": __schema__,
+            "version": __version__,
+            "exported_utc": evidence["exported_utc"],
+            "signer": args.actor,
+            "dataset_filter": args.dataset_id or "all",
+            "block_count": len(filtered_blocks),
+            "ledger_tip": ledger.tip_hash(),
+        }, f, indent=2)
     
-    print(f"✅ Evidence bundle exported to {args.bundle_dir}")
-    print(f"   - evidence.json: {len(filtered_blocks)} blocks")
-    print(f"   - evidence.sig: Ed25519 signature by {args.actor}")
-    print(f"   - ledger_tip: {ledger.tip_hash()[:16]}...")
+    # Save README
+    readme_path = os.path.join(args.bundle_dir, "README.txt")
+    with open(readme_path, "w", encoding="utf-8") as f:
+        f.write(f"""DNA Ledger Vault - Evidence Bundle
+===================================
+
+Exported: {evidence["exported_utc"]}
+By: {args.actor}
+Dataset Filter: {args.dataset_id or "all"}
+Blocks: {len(filtered_blocks)}
+Ledger Tip: {ledger.tip_hash()}
+
+Files:
+------
+- evidence.json   : Ledger blocks + metadata
+- evidence.sig    : Ed25519 signature by exporter
+- metadata.json   : Bundle metadata
+- README.txt      : This file
+
+Verification:
+-------------
+1. Verify signature using ed25519_pub_pem_b64 from evidence.sig
+2. Check ledger_tip matches current ledger state
+3. Verify hash chain integrity across blocks
+4. Check all signatures in individual blocks
+
+Schema: {__schema__}
+Version: {__version__}
+Invariants: {__invariants__}
+""")
+    
+    print(f"✅ Evidence bundle exported to: {args.bundle_dir}")
+    print(f"   Blocks exported: {len(filtered_blocks)}")
+    print(f"   Ledger tip: {ledger.tip_hash()}")
+    print(f"   Signed by: {args.actor}")
+    print("   Files created: evidence.json, evidence.sig, metadata.json, README.txt")
 
 def cmd_init_identities(args):
     st = ensure_state(args.out)

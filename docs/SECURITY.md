@@ -4,6 +4,27 @@ This document explains the cryptographic invariants and security properties of `
 
 ---
 
+## 🔒 Ethics Anchor
+
+**Ethics Anchor (SHA-256):** `65b14d584f5a5fd070fe985eeb86e14cb3ce56a4fc41fd9e987f2259fe1f15c1`
+
+This hash cryptographically commits to the hard ethical invariants governing DNA Ledger Vault and related systems. The anchor is verified across:
+- Documentation (SECURITY.md, ETHICS-PROBABILISTIC-DISTANCE.md)
+- Test suites (ethics-invariant tests)
+- CI/CD pipelines (automated verification)
+
+**Doctrine:** See [ETHICS-PROBABILISTIC-DISTANCE.md](ETHICS-PROBABILISTIC-DISTANCE.md) for full ethical framework.
+
+**Key Principles:**
+- No human bodies as assets
+- No likeness reconstruction
+- No learning/memory/personalization loops
+- No engagement optimization
+- Probabilistic distance enforcement
+- Revocable tokens with forward secrecy
+
+---
+
 ## 🔒 SECURITY INVARIANTS (Audit-Grade)
 
 These are the **non-negotiable properties** that the system enforces. Any violation indicates compromise or implementation error.
