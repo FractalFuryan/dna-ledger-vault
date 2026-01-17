@@ -13,3 +13,9 @@ state/
 .DS_Store
 .vscode/
 .idea/
+
+# Foundry/Ethereum
+out/
+cache/
+broadcast/
+.env

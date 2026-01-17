@@ -89,6 +89,36 @@ All cryptographic operations tagged with scheme identifiers:
 - `hash_scheme`: Hashing algorithm version  
 - `aead_scheme`: AEAD cipher version
 
+---
+
+## ⛓️ Ethereum Bridge (v0.1)
+
+⭕️🛑 **Privacy-safe on-chain attestation** for GeoPhase commitments.
+
+- **Contracts**: [AnankeAttestationRegistry](contracts/AnankeAttestationRegistry.sol), [AnankeRevocationRegistry](contracts/AnankeRevocationRegistry.sol)
+- **Target**: Base L2 (low gas, fast finality)
+- **Storage**: Commitments only - no media, no likeness, no user data
+- **Features**: One-shot attestation, public revocation, ethics anchor verification
+
+**Quick Start:**
+```bash
+# Install Foundry
+curl -L https://foundry.paradigm.xyz | bash
+foundryup
+
+# Build contracts
+make contracts
+
+# Deploy to Base Sepolia (testnet)
+cp .env.example .env  # Fill in PRIVATE_KEY
+python -m geophase_eth.deploy --network base-sepolia
+
+# Run example workflow
+python -m geophase_eth.example
+```
+
+See [docs/GEO-COMMIT-SPEC.md](docs/GEO-COMMIT-SPEC.md) for commitment format and [docs/DEPLOYMENT-ETH.md](docs/DEPLOYMENT-ETH.md) for deployment guide.
+
 Enables seamless upgrades (XChaCha20, HPKE, PQ-hybrid) without breaking old ledgers.  
 See [CRYPTO_UPGRADES.md](docs/CRYPTO_UPGRADES.md) for upgrade roadmap.
 
@@ -114,6 +144,15 @@ pip install -r requirements-lock.txt
 
 # Option 2: Bounded dependencies (development, allows patches)
 pip install -r requirements.txt
+
+# Option 3: Install with Ethereum bridge support
+pip install -r requirements.txt
+```
+
+**For Ethereum bridge development:**
+```bash
+make install-foundry  # Install Foundry (Solidity toolchain)
+make contracts        # Build smart contracts
 ```
 
 **Verify installation:**
@@ -299,6 +338,11 @@ See [CRYPTO_UPGRADES.md](docs/CRYPTO_UPGRADES.md) for complete upgrade strategy.
 - [STATE-MIXER-FK.md](docs/STATE-MIXER-FK.md) — Nonlinear state mixer (formal spec, v2 strengthening)
 - [ZK-TELEPORT-OPTION-A.md](docs/ZK-TELEPORT-OPTION-A.md) — Halo2 teleport proof (field-valid, rigorous)
 - [GEO-PHASE.md](docs/GEO-PHASE.md) — Dual geo-phase architecture (audit-only cosine buffer)
+
+### Ethereum Bridge (2026-01-17)
+- [GEO-COMMIT-SPEC.md](docs/GEO-COMMIT-SPEC.md) — On-chain commitment format & verification flow
+- [DEPLOYMENT-ETH.md](docs/DEPLOYMENT-ETH.md) — Base L2 deployment guide
+- [THREAT-MODEL-ETH.md](docs/THREAT-MODEL-ETH.md) — Security analysis for on-chain layer
 
 ### Development Tools
 - **Makefile**: `make status`, `make docs-verify`, `make test`, `make lint`

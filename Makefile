@@ -1,16 +1,21 @@
-.PHONY: help install test verify clean format lint ethics status docs-verify
+.PHONY: help install install-foundry test verify clean format lint ethics status docs-verify contracts deploy-sepolia typecheck
 
 help:
 	@echo "DNA Ledger Vault - Makefile targets"
 	@echo "===================================="
 	@echo ""
 	@echo "Setup:"
-	@echo "  make install      - Install dependencies"
+	@echo "  make install          - Install dependencies"
+	@echo "  make install-foundry  - Install Foundry (Solidity toolchain)"
 	@echo ""
 	@echo "Testing:"
-	@echo "  make test         - Run all tests"
-	@echo "  make ethics       - Run ethics invariant tests"
-	@echo "  make crypto       - Run crypto scheme tests"
+	@echo "  make test             - Run all tests"
+	@echo "  make ethics           - Run ethics invariant tests"
+	@echo "  make crypto           - Run crypto scheme tests"
+	@echo ""
+	@echo "Ethereum:"
+	@echo "  make contracts        - Build Solidity contracts"
+	@echo "  make deploy-sepolia   - Deploy to Base Sepolia testnet"
 	@echo ""
 	@echo "Verification:"
 	@echo "  make verify       - Verify ledger integrity"
@@ -63,6 +68,24 @@ typecheck:
 clean:
 	find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
 	find . -type d -name .pytest_cache -exec rm -rf {} + 2>/dev/null || true
+	find . -type d -name .mypy_cache -exec rm -rf {} + 2>/dev/null || true
+	find . -type d -name .ruff_cache -exec rm -rf {} + 2>/dev/null || true
+	rm -rf out cache broadcast *.egg-info
+
+install-foundry:
+	@command -v forge >/dev/null 2>&1 || { \
+		echo "Installing Foundry..."; \
+		curl -L https://foundry.paradigm.xyz | bash; \
+		foundryup; \
+	}
+	@echo "✅ Foundry installed"
+
+contracts:
+	forge build
+	@echo "✅ Contracts compiled"
+
+deploy-sepolia:
+	python -m geophase_eth.deploy --network base-sepolia
 	find . -type d -name .mypy_cache -exec rm -rf {} + 2>/dev/null || true
 	find . -type d -name .ruff_cache -exec rm -rf {} + 2>/dev/null || true
 	find . -type f -name "*.pyc" -delete
