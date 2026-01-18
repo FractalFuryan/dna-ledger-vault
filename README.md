@@ -1,9 +1,10 @@
 # dna-ledger-vault 🧬⛓️🔐
 
-[![Release](https://img.shields.io/badge/release-v1.0.0--audit-blue.svg)](https://github.com/FractalFuryan/dna-ledger-vault/releases/tag/v1.0.0-audit)
-[![Tests](https://img.shields.io/badge/tests-12%2F12-brightgreen.svg)](#security-invariants)
+[![Release](https://img.shields.io/badge/release-v1.1.0--ethereum-blue.svg)](https://github.com/FractalFuryan/dna-ledger-vault)
+[![Tests](https://img.shields.io/badge/tests-55%2F55-brightgreen.svg)](#security-invariants)
 [![Python](https://img.shields.io/badge/python-3.12-blue.svg)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Boundary](https://img.shields.io/badge/boundary-enforced-green.svg)](#-math-vs-interpretation-boundary)
 
 **DNA stays off-chain (encrypted).** A hash-chained, signed ledger stores only:
 - Dataset fingerprints (SHA-256 + BLAKE3 dual hashing, Merkle roots)
@@ -31,8 +32,11 @@ This is the "only kind" of DNA blockchain tech that doesn't blow up privacy:
 - **Scheme Versioning**: All crypto operations tagged for forward-compatible upgrades
 
 **Security Invariants:** 14 verified properties (see [SECURITY.md](docs/SECURITY.md))  
-**Test Coverage:** 12/12 tests passing (6 invariants + 6 crypto schemes)  
-**Dependencies:** Locked to exact versions in `requirements-lock.txt`
+**Test Coverage:** 55/55 tests passing (30 core + 25 RFC6979 + Ethereum integration)  
+**Dependencies:** Locked to exact versions in `requirements-lock.txt`  
+**Ethereum Bridge:** v0.1.1 production-hardened (Base L2, fail-closed, bytecode lock)  
+**Signing:** RFC6979 deterministic ECDSA (secp256k1, low-S normalized)  
+**Boundary Enforcement:** CI-gated math/interpretation separation
 
 See [RELEASE_NOTES.md](RELEASE_NOTES.md) for complete audit compliance summary.
 
@@ -111,33 +115,58 @@ All cryptographic operations tagged with scheme identifiers:
 
 ---
 
-## ⛓️ Ethereum Bridge (v0.1)
+## ⛓️ Ethereum Bridge (v0.1.1 Production-Hardened)
 
 ⭕️🛑 **Privacy-safe on-chain attestation** for GeoPhase commitments.
 
-- **Contracts**: [AnankeAttestationRegistry](contracts/AnankeAttestationRegistry.sol), [AnankeRevocationRegistry](contracts/AnankeRevocationRegistry.sol)
-- **Target**: Base L2 (low gas, fast finality)
+**Core Features:**
+- **Contracts**: [AnankeAttestationRegistry](contracts/src/AnankeAttestationRegistry.sol), [AnankeRevocationRegistry](contracts/src/AnankeRevocationRegistry.sol)
+- **Target**: Base L2 (low gas ~$0.01-0.10/tx, 2-second finality)
 - **Storage**: Commitments only - no media, no likeness, no user data
-- **Features**: One-shot attestation, public revocation, ethics anchor verification
+- **Signing**: RFC6979 deterministic ECDSA (secp256k1, low-S normalized)
+
+**Production Hardening (v0.1.1):**
+- ✅ **Fail-closed server**: STRICT_CHAIN + STRICT_REVOCATION defaults
+- ✅ **Bytecode lock**: Contract integrity verification at startup
+- ✅ **Canonical commitments**: PREFIX_V1 domain separation
+- ✅ **Health monitoring**: RPC latency tracking, error rates
+- ✅ **FastAPI middleware**: Pre-generation gate enforcement
+- ✅ **Comprehensive tests**: 18/18 passing (geocommit + fail-closed + bytecode lock)
 
 **Quick Start:**
 ```bash
-# Install Foundry
-curl -L https://foundry.paradigm.xyz | bash
-foundryup
+# Install dependencies
+make install
+pip install web3 eth-account python-dotenv ecdsa  # Ethereum deps
+
+# Install Foundry (Solidity toolchain)
+make install-foundry
 
 # Build contracts
 make contracts
 
+# Configure environment
+cp .env.example .env  # Fill in RPC URLs, contract addresses, etc.
+
+# Verify boundary enforcement
+make boundary  # Ensures math/interpretation separation
+
+# Run comprehensive tests
+pytest -v  # 55/55 tests (includes Ethereum integration)
+
 # Deploy to Base Sepolia (testnet)
-cp .env.example .env  # Fill in PRIVATE_KEY
 python -m geophase_eth.deploy --network base-sepolia
 
-# Run example workflow
-python -m geophase_eth.example
+# Run RFC6979 signing example
+python examples/geophase_signing_example.py
 ```
 
-See [docs/GEO-COMMIT-SPEC.md](docs/GEO-COMMIT-SPEC.md) for commitment format and [docs/DEPLOYMENT-ETH.md](docs/DEPLOYMENT-ETH.md) for deployment guide.
+**Documentation:**
+- [docs/GEO-COMMIT-SPEC.md](docs/GEO-COMMIT-SPEC.md) - Commitment format specification
+- [docs/DEPLOYMENT-ETH.md](docs/DEPLOYMENT-ETH.md) - Deployment guide
+- [docs/REGULATOR-SUMMARY.md](docs/REGULATOR-SUMMARY.md) - Compliance documentation
+- [docs/RFC6979-NONCE-POLICY.md](docs/RFC6979-NONCE-POLICY.md) - Signing policy
+- [ETHEREUM-BRIDGE-SUMMARY.md](ETHEREUM-BRIDGE-SUMMARY.md) - Architecture overview
 
 Enables seamless upgrades (XChaCha20, HPKE, PQ-hybrid) without breaking old ledgers.  
 See [CRYPTO_UPGRADES.md](docs/CRYPTO_UPGRADES.md) for upgrade roadmap.
@@ -316,22 +345,34 @@ GitHub Actions workflow runs on push:
 
 ## Roadmap
 
-### v1.0.0-audit (Current) ✅
+### v1.1.0-ethereum (Current) ✅
+- **Base L2 Integration**: Privacy-safe on-chain attestations (commitments only)
+- **Production Hardening**: Fail-closed server, bytecode lock, health monitoring
+- **RFC6979 Signing**: Deterministic ECDSA (secp256k1, low-S normalized)
+- **Boundary Enforcement**: CI-gated math/interpretation separation
 - ChaCha20-Poly1305 AEAD (96-bit nonces, key-per-dataset isolation)
 - X25519 ECDH + HKDF-SHA256 key wrapping
-- Ed25519 signatures (deterministic, collision-resistant)
+- Ed25519 signatures (internal identities, deterministic)
 - SHA-256 + BLAKE3 dual hashing
 - Scheme versioning for all crypto operations
 - Merkle proof generation + verification
-- 14 security invariants verified
+- **55/55 tests passing** (30 core + 25 RFC6979 + Ethereum)
 - Frozen dependencies for audit reproducibility
 
-### v1.1.0 (Future Upgrades) 🚀
+### v1.0.0-audit (2026-01-15) ✅
+- Initial audit-grade release
+- 14 security invariants verified
+- 12/12 core tests passing
+- Comprehensive documentation
+
+### v1.2.0 (Future Upgrades) 🚀
 - **XChaCha20-Poly1305**: 192-bit nonces (when cryptography library supports)
 - **HPKE wrapping**: RFC 9180 hybrid public key encryption
 - **PQ-hybrid**: X25519 + ML-KEM-768 post-quantum resistance
+- **Ethereum v0.2**: Signature-gated revocation, NFT layer (seed-rights), batch attestation
+- **Event indexer**: CSV export for audits, /health/eth endpoint
 
-See [CRYPTO_UPGRADES.md](docs/CRYPTO_UPGRADES.md) for complete upgrade strategy.
+See [CRYPTO_UPGRADES.md](docs/CRYPTO_UPGRADES.md) and [docs/V0_2_DESIGN_NOTES.md](docs/V0_2_DESIGN_NOTES.md) for complete upgrade strategy.
 
 ---
 
@@ -346,11 +387,35 @@ See [CRYPTO_UPGRADES.md](docs/CRYPTO_UPGRADES.md) for complete upgrade strategy.
 
 ## Documentation
 
+### Core Documentation
 - [SECURITY.md](docs/SECURITY.md) — Security model, cryptographic primitives, 14 invariants, ethics anchor
 - [CRYPTO_UPGRADES.md](docs/CRYPTO_UPGRADES.md) — Future crypto upgrade roadmap (XChaCha, HPKE, PQ)
 - [GLOSSARY.md](docs/GLOSSARY.md) — Technical terminology, ethics concepts, cryptographic terms
-- [RELEASE_NOTES.md](RELEASE_NOTES.md) — v1.0.0-audit release summary
+- [RELEASE_NOTES.md](RELEASE_NOTES.md) — Release summaries
 - [requirements-lock.txt](requirements-lock.txt) — Frozen dependency snapshot for audits
+
+### Ethereum Bridge (v0.1.1)
+- [ETHEREUM-BRIDGE-SUMMARY.md](ETHEREUM-BRIDGE-SUMMARY.md) — Architecture overview
+- [docs/REGULATOR-SUMMARY.md](docs/REGULATOR-SUMMARY.md) — Compliance documentation (400+ lines)
+- [docs/WHAT-THIS-IS-NOT.md](docs/WHAT-THIS-IS-NOT.md) — Clear boundary definitions
+- [docs/V0_2_DESIGN_NOTES.md](docs/V0_2_DESIGN_NOTES.md) — Future roadmap
+- [docs/GEO-COMMIT-SPEC.md](docs/GEO-COMMIT-SPEC.md) — On-chain commitment format
+- [docs/DEPLOYMENT-ETH.md](docs/DEPLOYMENT-ETH.md) — Base L2 deployment guide
+- [docs/THREAT-MODEL-ETH.md](docs/THREAT-MODEL-ETH.md) — Security analysis
+
+### RFC6979 Deterministic ECDSA
+- [docs/RFC6979-NONCE-POLICY.md](docs/RFC6979-NONCE-POLICY.md) — Nonce generation policy
+- [docs/RFC6979-IMPLEMENTATION.md](docs/RFC6979-IMPLEMENTATION.md) — Technical summary
+- [examples/geophase_signing_example.py](examples/geophase_signing_example.py) — Working demo
+
+### Boundary Enforcement
+- [docs/SCALAR_WAZE_BOUNDARY.md](docs/SCALAR_WAZE_BOUNDARY.md) — Math/interpretation separation
+- [docs/NON_CLAIMS.md](docs/NON_CLAIMS.md) — Hard boundary (what we do NOT claim)
+- [docs/CLAIMS_REGISTER.md](docs/CLAIMS_REGISTER.md) — Explicit claim categorization
+- [PROPRIETARY-NOTICE.md](PROPRIETARY-NOTICE.md) — IP boundaries
+
+### IP Protection
+- [PROPRIETARY-NOTICE.md](PROPRIETARY-NOTICE.md) — Open trust layer, closed engine
 
 ### Technical Specifications (2026-01-15)
 - [THREAD-2026-01-15.md](docs/THREAD-2026-01-15.md) — Thread compilation: ethics doctrine, architecture notes
@@ -365,8 +430,10 @@ See [CRYPTO_UPGRADES.md](docs/CRYPTO_UPGRADES.md) for complete upgrade strategy.
 - [THREAT-MODEL-ETH.md](docs/THREAT-MODEL-ETH.md) — Security analysis for on-chain layer
 
 ### Development Tools
-- **Makefile**: `make status`, `make docs-verify`, `make test`, `make lint`
+- **Makefile**: `make status`, `make docs-verify`, `make test`, `make lint`, `make boundary`, `make contracts`
 - **Export Evidence**: `python -m cli.main export-evidence` — Generate audit bundles
+- **Boundary Gate**: `make boundary` — Verify math/interpretation separation
+- **CI Workflows**: Main CI, boundary gate (auto-enforced on PR/push)
 
 ---
 
@@ -392,7 +459,46 @@ If you use this work in academic research, please cite:
 
 ---
 
-## Recent Updates (2026-01-15)
+## Recent Updates
+
+### 2026-01-18: Ethereum v0.1.1 + RFC6979 + Boundary Enforcement
+
+**Ethereum Bridge Hardening (v0.1.1):**
+- ✅ Fail-closed server architecture (STRICT_CHAIN, STRICT_REVOCATION)
+- ✅ Bytecode integrity verification (contract code hash checking)
+- ✅ Canonical geocommit computation (PREFIX_V1 domain separation)
+- ✅ FastAPI middleware gate (pre-generation enforcement)
+- ✅ Privacy-safe metrics (system health only, no user data)
+- ✅ Comprehensive tests (18/18 passing)
+
+**RFC6979 Deterministic ECDSA:**
+- ✅ Audit-grade deterministic signing (no RNG dependency)
+- ✅ Low-S normalization (Bitcoin/Ethereum canonical signatures)
+- ✅ Domain separation via `extra` parameter (commitment binding)
+- ✅ Rejection sampling (no modulo bias)
+- ✅ secp256k1 specialized (Ethereum compatible)
+- ✅ Comprehensive tests (25/25 passing)
+- ✅ Policy documentation ([RFC6979-NONCE-POLICY.md](docs/RFC6979-NONCE-POLICY.md))
+
+**Math/Interpretation Boundary Enforcement:**
+- ✅ Formal separation (classical math vs interpretive frameworks)
+- ✅ CI-enforced boundary gate (`make boundary`)
+- ✅ 3 boundary docs ([SCALAR_WAZE_BOUNDARY.md](docs/SCALAR_WAZE_BOUNDARY.md), [NON_CLAIMS.md](docs/NON_CLAIMS.md), [CLAIMS_REGISTER.md](docs/CLAIMS_REGISTER.md))
+- ✅ Clear non-ownership statements (Gaussian explicit formula unchanged)
+- ✅ Layering integrity (no upward dependencies)
+
+**Documentation:**
+- ✅ [PROPRIETARY-NOTICE.md](PROPRIETARY-NOTICE.md) - IP boundaries (open trust layer, closed engine)
+- ✅ [docs/REGULATOR-SUMMARY.md](docs/REGULATOR-SUMMARY.md) - 400+ line compliance doc
+- ✅ [docs/WHAT-THIS-IS-NOT.md](docs/WHAT-THIS-IS-NOT.md) - Clear boundary definitions
+- ✅ [docs/V0_2_DESIGN_NOTES.md](docs/V0_2_DESIGN_NOTES.md) - Future roadmap
+- ✅ [docs/RFC6979-IMPLEMENTATION.md](docs/RFC6979-IMPLEMENTATION.md) - Technical summary
+
+**All updates maintain audit-grade posture. No breaking changes.**
+
+---
+
+### 2026-01-15: Ethics & Documentation
 
 **Ethics & Documentation:**
 - Added ethics anchor verification (SHA-256: `65b14d584...`)
@@ -403,8 +509,6 @@ If you use this work in academic research, please cite:
 - Evidence export command for audit bundle generation
 - Documentation verification scripts
 - Makefile with convenient build targets
-
-**All updates maintain audit-grade posture with zero breaking changes.**
 
 ---
 
