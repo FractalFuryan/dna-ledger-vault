@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DNA Ledger Vault - Observability Dashboard v2</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #333;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        
+        header {
+            background: rgba(255, 255, 255, 0.95);
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+            margin-bottom: 30px;
+        }
+        
+        h1 {
+            color: #667eea;
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+        
+        h2 {
+            color: #555;
+            font-size: 1.8em;
+            margin-bottom: 15px;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 10px;
+        }
+        
+        .tagline {
+            color: #777;
+            font-size: 1.1em;
+        }
+        
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 25px;
+            margin-bottom: 30px;
+        }
+        
+        .card {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 12px;
+            padding: 25px;
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.15);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
+        }
+        
+        .card-full {
+            grid-column: 1 / -1;
+        }
+        
+        .metric {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            margin-bottom: 10px;
+        }
+        
+        .metric-label {
+            font-weight: 600;
+            color: #555;
+        }
+        
+        .metric-value {
+            font-size: 1.5em;
+            font-weight: bold;
+            color: #667eea;
+        }
+        
+        .compliance-score {
+            text-align: center;
+            padding: 30px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 12px;
+            margin-bottom: 20px;
+        }
+        
+        .compliance-score h3 {
+            font-size: 1.2em;
+            margin-bottom: 10px;
+            opacity: 0.9;
+        }
+        
+        .score-display {
+            font-size: 4em;
+            font-weight: bold;
+            margin: 20px 0;
+        }
+        
+        .risk-badge {
+            display: inline-block;
+            padding: 8px 20px;
+            border-radius: 20px;
+            font-weight: bold;
+            text-transform: uppercase;
+            font-size: 0.9em;
+        }
+        
+        .risk-low {
+            background: #4caf50;
+        }
+        
+        .risk-medium {
+            background: #ff9800;
+        }
+        
+        .risk-high {
+            background: #f44336;
+        }
+        
+        .recommendations {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 15px;
+            border-radius: 4px;
+            margin-top: 15px;
+        }
+        
+        .recommendations li {
+            margin: 8px 0;
+            line-height: 1.6;
+        }
+        
+        .timeline-event {
+            border-left: 3px solid #667eea;
+            padding: 15px;
+            margin: 15px 0;
+            background: #f8f9fa;
+            border-radius: 4px;
+            position: relative;
+        }
+        
+        .timeline-event::before {
+            content: '';
+            position: absolute;
+            left: -8px;
+            top: 20px;
+            width: 12px;
+            height: 12px;
+            background: #667eea;
+            border-radius: 50%;
+            border: 3px solid white;
+        }
+        
+        .event-type {
+            display: inline-block;
+            padding: 4px 12px;
+            background: #667eea;
+            color: white;
+            border-radius: 4px;
+            font-size: 0.85em;
+            font-weight: bold;
+            margin-bottom: 8px;
+        }
+        
+        .anomaly {
+            border-left: 4px solid #f44336;
+            background: #ffebee;
+            padding: 15px;
+            margin: 12px 0;
+            border-radius: 4px;
+        }
+        
+        .anomaly-severity-high {
+            border-left-color: #f44336;
+        }
+        
+        .anomaly-severity-medium {
+            border-left-color: #ff9800;
+        }
+        
+        .anomaly-severity-low {
+            border-left-color: #ffc107;
+        }
+        
+        .chart-container {
+            position: relative;
+            height: 300px;
+            margin-top: 20px;
+        }
+        
+        #datasetSelector {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #667eea;
+            border-radius: 6px;
+            font-size: 1em;
+            margin-bottom: 20px;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #777;
+            font-size: 1.1em;
+        }
+        
+        .error {
+            background: #ffebee;
+            border-left: 4px solid #f44336;
+            padding: 20px;
+            border-radius: 4px;
+            color: #c62828;
+        }
+        
+        footer {
+            text-align: center;
+            padding: 20px;
+            color: white;
+            opacity: 0.8;
+            margin-top: 30px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🧬 DNA Ledger Vault</h1>
+            <p class="tagline">Observability Dashboard v2.0 — Operational Intelligence & Compliance</p>
+        </header>
+        
+        <!-- Compliance Health Score -->
+        <div class="card">
+            <div id="complianceLoading" class="loading">Loading compliance health...</div>
+            <div id="complianceContent" style="display: none;">
+                <div class="compliance-score">
+                    <h3>Compliance Health Score</h3>
+                    <div class="score-display" id="scoreDisplay">--</div>
+                    <div class="risk-badge" id="riskBadge">CALCULATING</div>
+                </div>
+                
+                <h3 style="margin-top: 20px;">Metrics Breakdown</h3>
+                <div id="metricsBreakdown"></div>
+                
+                <div class="recommendations">
+                    <strong>📋 Recommendations:</strong>
+                    <ul id="recommendationsList"></ul>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Dashboard Grid -->
+        <div class="dashboard-grid">
+            <!-- Compliance Metrics Chart -->
+            <div class="card">
+                <h2>📊 Compliance Metrics</h2>
+                <div class="chart-container">
+                    <canvas id="complianceChart"></canvas>
+                </div>
+            </div>
+            
+            <!-- Regulator Report Summary -->
+            <div class="card">
+                <h2>🏛️ Regulator Report</h2>
+                <div id="regulatorLoading" class="loading">Loading report...</div>
+                <div id="regulatorContent" style="display: none;">
+                    <div class="metric">
+                        <span class="metric-label">Report ID</span>
+                        <span class="metric-value" id="reportId" style="font-size: 1em;">--</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">Total Datasets</span>
+                        <span class="metric-value" id="totalDatasets">--</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">Total Consents</span>
+                        <span class="metric-value" id="totalConsents">--</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">Erasure Requests</span>
+                        <span class="metric-value" id="totalErasures">--</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">Audit Trail Integrity</span>
+                        <span class="metric-value" id="auditIntegrity">--</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Dataset Timeline Viewer -->
+        <div class="card card-full">
+            <h2>📅 Dataset Lifecycle Timeline</h2>
+            <select id="datasetSelector">
+                <option value="">Select a dataset...</option>
+            </select>
+            <div id="timelineLoading" class="loading" style="display: none;">Loading timeline...</div>
+            <div id="timelineContent"></div>
+        </div>
+        
+        <!-- Anomaly Detection -->
+        <div class="card card-full">
+            <h2>🚨 Anomaly Detection</h2>
+            <div id="anomalyLoading" class="loading">Analyzing access patterns...</div>
+            <div id="anomalyContent" style="display: none;"></div>
+        </div>
+        
+        <footer>
+            DNA Ledger Vault v2.0 — Enhanced with FastAPI + Chart.js | 
+            <a href="http://localhost:8081/docs" target="_blank" style="color: white;">API Docs</a>
+        </footer>
+    </div>
+    
+    <script>
+        // API Base URL (change to deployed URL in production)
+        const API_BASE = 'http://localhost:8081';
+        
+        let complianceChart = null;
+        
+        // Load Compliance Health
+        async function loadComplianceHealth() {
+            try {
+                const response = await fetch(`${API_BASE}/compliance-health`);
+                const data = await response.json();
+                
+                // Update score display
+                document.getElementById('scoreDisplay').textContent = data.overall_score.toFixed(1);
+                
+                // Update risk badge
+                const riskBadge = document.getElementById('riskBadge');
+                riskBadge.textContent = data.risk_level.toUpperCase();
+                riskBadge.className = `risk-badge risk-${data.risk_level}`;
+                
+                // Metrics breakdown
+                const metricsDiv = document.getElementById('metricsBreakdown');
+                metricsDiv.innerHTML = `
+                    <div class="metric">
+                        <span class="metric-label">Total Datasets</span>
+                        <span class="metric-value">${data.metrics.total_datasets}</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">Consent Coverage</span>
+                        <span class="metric-value">${data.metrics.consent_coverage.toFixed(1)}%</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">Active Consents</span>
+                        <span class="metric-value">${data.metrics.active_consents}</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">Erasures Executed</span>
+                        <span class="metric-value">${data.metrics.erasures}</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">Key Rotations</span>
+                        <span class="metric-value">${data.metrics.key_rotations}</span>
+                    </div>
+                `;
+                
+                // Recommendations
+                const recommendationsList = document.getElementById('recommendationsList');
+                recommendationsList.innerHTML = data.recommendations
+                    .map(rec => `<li>${rec}</li>`)
+                    .join('');
+                
+                // Show content
+                document.getElementById('complianceLoading').style.display = 'none';
+                document.getElementById('complianceContent').style.display = 'block';
+                
+                // Create chart
+                createComplianceChart(data.metrics);
+                
+            } catch (error) {
+                document.getElementById('complianceLoading').innerHTML = 
+                    `<div class="error">Failed to load compliance health: ${error.message}</div>`;
+            }
+        }
+        
+        // Create Compliance Chart
+        function createComplianceChart(metrics) {
+            const ctx = document.getElementById('complianceChart').getContext('2d');
+            
+            if (complianceChart) {
+                complianceChart.destroy();
+            }
+            
+            complianceChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: ['Datasets', 'Active Consents', 'Revocations', 'Erasures', 'Key Rotations'],
+                    datasets: [{
+                        label: 'Count',
+                        data: [
+                            metrics.total_datasets,
+                            metrics.active_consents,
+                            metrics.revocations,
+                            metrics.erasures,
+                            metrics.key_rotations
+                        ],
+                        backgroundColor: [
+                            'rgba(102, 126, 234, 0.7)',
+                            'rgba(76, 175, 80, 0.7)',
+                            'rgba(255, 152, 0, 0.7)',
+                            'rgba(244, 67, 54, 0.7)',
+                            'rgba(156, 39, 176, 0.7)'
+                        ],
+                        borderColor: [
+                            'rgba(102, 126, 234, 1)',
+                            'rgba(76, 175, 80, 1)',
+                            'rgba(255, 152, 0, 1)',
+                            'rgba(244, 67, 54, 1)',
+                            'rgba(156, 39, 176, 1)'
+                        ],
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                stepSize: 1
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    }
+                }
+            });
+        }
+        
+        // Load Regulator Report
+        async function loadRegulatorReport() {
+            try {
+                const response = await fetch(`${API_BASE}/regulator-report`);
+                const data = await response.json();
+                
+                document.getElementById('reportId').textContent = data.report_id;
+                document.getElementById('totalDatasets').textContent = data.total_datasets;
+                document.getElementById('totalConsents').textContent = data.total_consents;
+                document.getElementById('totalErasures').textContent = data.total_erasures;
+                document.getElementById('auditIntegrity').textContent = data.audit_trail_integrity ? '✅ VALID' : '❌ FAILED';
+                document.getElementById('auditIntegrity').style.color = data.audit_trail_integrity ? '#4caf50' : '#f44336';
+                
+                document.getElementById('regulatorLoading').style.display = 'none';
+                document.getElementById('regulatorContent').style.display = 'block';
+                
+            } catch (error) {
+                document.getElementById('regulatorLoading').innerHTML = 
+                    `<div class="error">Failed to load regulator report: ${error.message}</div>`;
+            }
+        }
+        
+        // Load Dataset Timeline
+        async function loadDatasetTimeline(datasetId) {
+            if (!datasetId) {
+                document.getElementById('timelineContent').innerHTML = '';
+                return;
+            }
+            
+            document.getElementById('timelineLoading').style.display = 'block';
+            document.getElementById('timelineContent').innerHTML = '';
+            
+            try {
+                const response = await fetch(`${API_BASE}/timeline/${datasetId}`);
+                const data = await response.json();
+                
+                const timelineHTML = data.events.map(event => {
+                    const eventTypeClass = event.event_type.replace(/_/g, '-');
+                    return `
+                        <div class="timeline-event">
+                            <div class="event-type">${event.event_type.replace(/_/g, ' ').toUpperCase()}</div>
+                            <div><strong>${event.timestamp}</strong></div>
+                            <div>Actor: <strong>${event.actor}</strong></div>
+                            <div>${event.description}</div>
+                            ${Object.keys(event.metadata).length > 0 ? 
+                                `<details style="margin-top: 10px;">
+                                    <summary>Metadata</summary>
+                                    <pre style="background: white; padding: 10px; border-radius: 4px; margin-top: 5px;">${JSON.stringify(event.metadata, null, 2)}</pre>
+                                </details>` : ''}
+                        </div>
+                    `;
+                }).join('');
+                
+                document.getElementById('timelineContent').innerHTML = timelineHTML;
+                document.getElementById('timelineLoading').style.display = 'none';
+                
+            } catch (error) {
+                document.getElementById('timelineLoading').style.display = 'none';
+                document.getElementById('timelineContent').innerHTML = 
+                    `<div class="error">Failed to load timeline: ${error.message}</div>`;
+            }
+        }
+        
+        // Load Anomaly Detection
+        async function loadAnomalyDetection() {
+            try {
+                const response = await fetch(`${API_BASE}/anomaly-detection`);
+                const data = await response.json();
+                
+                let anomalyHTML = '';
+                
+                if (data.anomalies_detected === 0) {
+                    anomalyHTML = `
+                        <div style="text-align: center; padding: 40px; color: #4caf50;">
+                            <h3>✅ No Anomalies Detected</h3>
+                            <p>All access patterns appear normal.</p>
+                            <p style="margin-top: 10px; font-size: 0.9em; color: #777;">Scoring Method: ${data.scoring_method}</p>
+                        </div>
+                    `;
+                } else {
+                    anomalyHTML = `
+                        <div style="margin-bottom: 20px;">
+                            <strong>⚠️ ${data.anomalies_detected} anomal${data.anomalies_detected === 1 ? 'y' : 'ies'} detected</strong>
+                            <p style="color: #777; margin-top: 5px;">Scoring Method: ${data.scoring_method}</p>
+                        </div>
+                    `;
+                    
+                    data.anomalies.forEach(anomaly => {
+                        anomalyHTML += `
+                            <div class="anomaly anomaly-severity-${anomaly.severity}">
+                                <div><strong>${anomaly.type.replace(/_/g, ' ').toUpperCase()}</strong> — Severity: ${anomaly.severity.toUpperCase()}</div>
+                                <div style="margin-top: 8px;">${anomaly.description}</div>
+                                <details style="margin-top: 10px;">
+                                    <summary>Details</summary>
+                                    <pre style="background: white; padding: 10px; border-radius: 4px; margin-top: 5px;">${JSON.stringify(anomaly, null, 2)}</pre>
+                                </details>
+                            </div>
+                        `;
+                    });
+                }
+                
+                document.getElementById('anomalyContent').innerHTML = anomalyHTML;
+                document.getElementById('anomalyLoading').style.display = 'none';
+                document.getElementById('anomalyContent').style.display = 'block';
+                
+            } catch (error) {
+                document.getElementById('anomalyLoading').innerHTML = 
+                    `<div class="error">Failed to load anomaly detection: ${error.message}</div>`;
+            }
+        }
+        
+        // Populate dataset selector
+        async function populateDatasetSelector() {
+            try {
+                // Get datasets from v1 API
+                const response = await fetch('http://localhost:8080/api/datasets');
+                const datasets = await response.json();
+                
+                const selector = document.getElementById('datasetSelector');
+                datasets.forEach(dataset => {
+                    const option = document.createElement('option');
+                    option.value = dataset.dataset_id;
+                    option.textContent = `${dataset.dataset_id} (committed ${dataset.timestamp})`;
+                    selector.appendChild(option);
+                });
+                
+            } catch (error) {
+                console.error('Failed to load datasets:', error);
+            }
+        }
+        
+        // Event listener for dataset selector
+        document.getElementById('datasetSelector').addEventListener('change', (e) => {
+            loadDatasetTimeline(e.target.value);
+        });
+        
+        // Load all data on page load
+        window.addEventListener('DOMContentLoaded', () => {
+            loadComplianceHealth();
+            loadRegulatorReport();
+            loadAnomalyDetection();
+            populateDatasetSelector();
+        });
+        
+        // Auto-refresh every 60 seconds
+        setInterval(() => {
+            loadComplianceHealth();
+            loadRegulatorReport();
+            loadAnomalyDetection();
+        }, 60000);
+    </script>
+</body>
+</html>

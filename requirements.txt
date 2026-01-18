@@ -1,5 +1,5 @@
 # DNA Ledger Vault - Pinned Dependencies for Reproducible Builds
-# Updated: 2026-01-05
+# Updated: 2024-01-15 (Phase 2 - Enterprise Activation)
 
 # Core cryptography (pinned for audit reproducibility)
 cryptography>=42.0.0,<47.0.0  # Ed25519, X25519, ChaCha20-Poly1305
@@ -10,10 +10,19 @@ ecdsa>=0.18.0,<1.0.0          # RFC6979 deterministic ECDSA (secp256k1)
 # GA4GH Passport/Visa support
 pyjwt[crypto]>=2.8.0,<3.0.0   # JWT signing/verification (EdDSA/Ed25519)
 
-# Web Dashboard
+# Web Dashboard (v1 - Flask)
 flask>=3.0.0,<4.0.0           # REST API server
 flask-cors>=4.0.0,<5.0.0      # CORS support for frontend
 gunicorn>=21.0.0,<23.0.0      # Production WSGI server
+
+# Observability API (v2 - FastAPI)
+fastapi>=0.104.0,<1.0.0       # Modern async API framework
+uvicorn[standard]>=0.24.0,<1.0.0  # ASGI server with WebSocket support
+python-multipart>=0.0.6       # For file uploads in FastAPI
+
+# Customer Onboarding
+questionary>=2.0.0,<3.0.0     # Interactive CLI prompts
+rich>=13.0.0,<14.0.0          # Terminal formatting and progress bars
 
 # Ethereum bridge dependencies
 web3>=6.0.0,<7.0.0            # Ethereum/Base interaction

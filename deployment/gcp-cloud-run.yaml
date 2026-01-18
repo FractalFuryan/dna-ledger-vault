@@ -1,0 +1,92 @@
+# Google Cloud Run deployment configuration
+# Deploys DNA Ledger Vault to Google Cloud Run
+
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: dna-ledger-vault-api-v1
+  namespace: default
+  labels:
+    cloud.googleapis.com/location: us-central1
+spec:
+  template:
+    metadata:
+      annotations:
+        autoscaling.knative.dev/maxScale: '10'
+        autoscaling.knative.dev/minScale: '1'
+    spec:
+      containerConcurrency: 80
+      timeoutSeconds: 300
+      containers:
+      - image: gcr.io/<PROJECT_ID>/dna-ledger-vault:latest
+        ports:
+        - name: http1
+          containerPort: 8080
+        env:
+        - name: FLASK_ENV
+          value: production
+        resources:
+          limits:
+            cpu: '2'
+            memory: 2Gi
+        volumeMounts:
+        - name: ledger-state
+          mountPath: /app/state
+        command: ["gunicorn"]
+        args: ["-w", "4", "-b", "0.0.0.0:8080", "api.server:app"]
+      volumes:
+      - name: ledger-state
+        persistentVolumeClaim:
+          claimName: dna-ledger-state-pvc
+
+---
+
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: dna-ledger-vault-api-v2
+  namespace: default
+  labels:
+    cloud.googleapis.com/location: us-central1
+spec:
+  template:
+    metadata:
+      annotations:
+        autoscaling.knative.dev/maxScale: '10'
+        autoscaling.knative.dev/minScale: '1'
+    spec:
+      containerConcurrency: 80
+      timeoutSeconds: 300
+      containers:
+      - image: gcr.io/<PROJECT_ID>/dna-ledger-vault:latest
+        ports:
+        - name: http1
+          containerPort: 8081
+        resources:
+          limits:
+            cpu: '1'
+            memory: 1Gi
+        volumeMounts:
+        - name: ledger-state
+          mountPath: /app/state
+        command: ["uvicorn"]
+        args: ["api.v2.observability:app", "--host", "0.0.0.0", "--port", "8081"]
+      volumes:
+      - name: ledger-state
+        persistentVolumeClaim:
+          claimName: dna-ledger-state-pvc
+
+---
+
+# Persistent Volume Claim for shared state
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: dna-ledger-state-pvc
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: standard

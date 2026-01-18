@@ -1,0 +1,67 @@
+# Azure Container Instances deployment configuration
+# Deploys DNA Ledger Vault to Azure Container Instances
+
+apiVersion: '2021-09-01'
+location: eastus
+name: dna-ledger-vault
+properties:
+  containers:
+  - name: api-v1
+    properties:
+      image: <ACR_NAME>.azurecr.io/dna-ledger-vault:latest
+      resources:
+        requests:
+          cpu: 1.0
+          memoryInGb: 2.0
+      ports:
+      - port: 8080
+        protocol: TCP
+      environmentVariables:
+      - name: FLASK_ENV
+        value: production
+      volumeMounts:
+      - name: ledger-state
+        mountPath: /app/state
+      command: ["gunicorn", "-w", "4", "-b", "0.0.0.0:8080", "api.server:app"]
+      
+  - name: api-v2
+    properties:
+      image: <ACR_NAME>.azurecr.io/dna-ledger-vault:latest
+      resources:
+        requests:
+          cpu: 1.0
+          memoryInGb: 1.0
+      ports:
+      - port: 8081
+        protocol: TCP
+      volumeMounts:
+      - name: ledger-state
+        mountPath: /app/state
+      command: ["uvicorn", "api.v2.observability:app", "--host", "0.0.0.0", "--port", "8081"]
+  
+  osType: Linux
+  restartPolicy: Always
+  ipAddress:
+    type: Public
+    ports:
+    - protocol: TCP
+      port: 8080
+    - protocol: TCP
+      port: 8081
+    dnsNameLabel: dna-ledger-vault
+  
+  volumes:
+  - name: ledger-state
+    azureFile:
+      shareName: dna-ledger-state
+      storageAccountName: <STORAGE_ACCOUNT_NAME>
+      storageAccountKey: <STORAGE_ACCOUNT_KEY>
+  
+  imageRegistryCredentials:
+  - server: <ACR_NAME>.azurecr.io
+    username: <ACR_USERNAME>
+    password: <ACR_PASSWORD>
+
+tags:
+  environment: production
+  application: dna-ledger-vault

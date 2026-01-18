@@ -1,0 +1,115 @@
+version: '3.8'
+
+services:
+  # DNA Ledger Vault API (v1 Flask)
+  api-v1:
+    build:
+      context: ..
+      dockerfile: deployment/Dockerfile
+    container_name: dna_ledger_api_v1
+    ports:
+      - "8080:8080"
+    volumes:
+      - ledger_state:/app/state
+      - ledger_keys:/app/keys
+    environment:
+      - FLASK_ENV=production
+      - PYTHONUNBUFFERED=1
+    restart: unless-stopped
+    networks:
+      - dna_ledger_net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    command: gunicorn -w 4 -b 0.0.0.0:8080 api.server:app
+
+  # DNA Ledger Vault Observability API (v2 FastAPI)
+  api-v2:
+    build:
+      context: ..
+      dockerfile: deployment/Dockerfile
+    container_name: dna_ledger_api_v2
+    ports:
+      - "8081:8081"
+    volumes:
+      - ledger_state:/app/state
+      - ledger_keys:/app/keys
+    environment:
+      - PYTHONUNBUFFERED=1
+    restart: unless-stopped
+    networks:
+      - dna_ledger_net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    command: uvicorn api.v2.observability:app --host 0.0.0.0 --port 8081
+
+  # NGINX reverse proxy for dashboards
+  nginx:
+    image: nginx:alpine
+    container_name: dna_ledger_nginx
+    ports:
+      - "80:80"
+    volumes:
+      - ../dashboard:/usr/share/nginx/html/dashboard:ro
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - api-v1
+      - api-v2
+    restart: unless-stopped
+    networks:
+      - dna_ledger_net
+
+  # Prometheus monitoring (optional)
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: dna_ledger_prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+    restart: unless-stopped
+    networks:
+      - dna_ledger_net
+    profiles:
+      - monitoring
+
+  # Grafana dashboards (optional)
+  grafana:
+    image: grafana/grafana:latest
+    container_name: dna_ledger_grafana
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana-datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml:ro
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    restart: unless-stopped
+    networks:
+      - dna_ledger_net
+    profiles:
+      - monitoring
+
+volumes:
+  ledger_state:
+    driver: local
+  ledger_keys:
+    driver: local
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local
+
+networks:
+  dna_ledger_net:
+    driver: bridge

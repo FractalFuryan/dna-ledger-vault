@@ -33,6 +33,9 @@ from vault.store import Vault
 from vault.wrap import gen_x25519, wrap_dek
 from vault.passport_issuer import PassportIssuer
 from vault.erasure_manager import ErasureManager
+from onboarding.wizard import OnboardingWizard
+from onboarding.compliance_templates import ComplianceTemplates
+from pathlib import Path
 
 
 def b64e(b: bytes) -> str:
@@ -563,6 +566,59 @@ def cmd_verify(args):
     if not ok:
         raise SystemExit(1)
 
+
+def cmd_onboarding_wizard(args):
+    """Execute interactive onboarding wizard."""
+    wizard = OnboardingWizard(output_dir=args.out)
+    wizard.run()
+
+
+def cmd_onboarding_dpa(args):
+    """Generate Data Processing Agreement template."""
+    org_info = {
+        "org_name": args.org_name,
+        "org_type": args.org_type,
+        "jurisdiction": args.jurisdiction,
+        "dpo_email": args.dpo_email
+    }
+    
+    dpa_content = ComplianceTemplates.generate_dpa_template(org_info)
+    output_path = Path(args.out)
+    output_path.write_text(dpa_content)
+    
+    print(f"✓ Data Processing Agreement generated: {output_path}")
+    print("\n⚠️  DISCLAIMER: This is a template. Consult legal counsel before use.")
+
+
+def cmd_onboarding_dpia(args):
+    """Generate DPIA outline."""
+    dataset_info = {
+        "id": args.dataset_id,
+        "metadata": {
+            "dataset_name": args.dataset_name,
+            "data_type": args.data_type
+        }
+    }
+    
+    dpia_content = ComplianceTemplates.generate_dpia_outline(dataset_info)
+    output_path = Path(args.out)
+    output_path.write_text(dpia_content)
+    
+    print(f"✓ DPIA outline generated: {output_path}")
+    print("\n⚠️  DISCLAIMER: Complete the risk assessment sections with domain experts.")
+
+
+def cmd_onboarding_checklist(args):
+    """Generate compliance checklist."""
+    checklist_content = ComplianceTemplates.generate_compliance_checklist()
+    output_path = Path(args.out)
+    output_path.write_text(checklist_content)
+    
+    print(f"✓ Compliance checklist generated: {output_path}")
+    print(f"  Total requirements: {len(checklist_content.splitlines()) - 1}")
+    print("\nOpen in spreadsheet software to track compliance progress.")
+
+
 def cmd_secure_erase(args):
     """Execute GDPR/CPRA Right to Erasure with compliance reporting."""
     p = ensure_state(args.out)
@@ -897,6 +953,37 @@ def main() -> None:
     v = sub.add_parser("verify", help="Verify ledger integrity")
     v.add_argument("--out", required=True)
     v.set_defaults(func=cmd_verify)
+
+    # onboarding (command group)
+    ob = sub.add_parser("onboarding", help="Customer onboarding and compliance tools")
+    ob_sub = ob.add_subparsers(dest="onboarding_cmd")
+    
+    # onboarding wizard
+    ob_wizard = ob_sub.add_parser("wizard", help="Interactive onboarding wizard")
+    ob_wizard.add_argument("--out", default="./onboarding_state", help="Output directory for onboarding state")
+    ob_wizard.set_defaults(func=cmd_onboarding_wizard)
+    
+    # onboarding generate-dpa
+    ob_dpa = ob_sub.add_parser("generate-dpa", help="Generate Data Processing Agreement template")
+    ob_dpa.add_argument("--org-name", required=True, help="Organization name")
+    ob_dpa.add_argument("--org-type", default="Research Lab", help="Organization type")
+    ob_dpa.add_argument("--jurisdiction", default="EU", help="Primary jurisdiction")
+    ob_dpa.add_argument("--dpo-email", default="", help="Data Protection Officer email")
+    ob_dpa.add_argument("--out", default="./dpa_template.md", help="Output file path")
+    ob_dpa.set_defaults(func=cmd_onboarding_dpa)
+    
+    # onboarding generate-dpia
+    ob_dpia = ob_sub.add_parser("generate-dpia", help="Generate DPIA outline")
+    ob_dpia.add_argument("--dataset-name", required=True, help="Dataset display name")
+    ob_dpia.add_argument("--dataset-id", required=True, help="Dataset ID")
+    ob_dpia.add_argument("--data-type", default="Genomic Variants (VCF)", help="Type of data")
+    ob_dpia.add_argument("--out", default="./dpia_outline.md", help="Output file path")
+    ob_dpia.set_defaults(func=cmd_onboarding_dpia)
+    
+    # onboarding generate-checklist
+    ob_check = ob_sub.add_parser("generate-checklist", help="Generate GDPR/CPRA compliance checklist")
+    ob_check.add_argument("--out", default="./compliance_checklist.csv", help="Output file path")
+    ob_check.set_defaults(func=cmd_onboarding_checklist)
 
     args = p.parse_args()
     if hasattr(args, "func"):

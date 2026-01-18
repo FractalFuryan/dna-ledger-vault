@@ -1,0 +1,96 @@
+# AWS ECS Task Definition for DNA Ledger Vault
+# Deploys containerized application to AWS Elastic Container Service
+
+{
+  "family": "dna-ledger-vault",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "1024",
+  "memory": "2048",
+  "executionRoleArn": "arn:aws:iam::<ACCOUNT_ID>:role/ecsTaskExecutionRole",
+  "taskRoleArn": "arn:aws:iam::<ACCOUNT_ID>:role/dnaLedgerVaultTaskRole",
+  "containerDefinitions": [
+    {
+      "name": "api-v1",
+      "image": "<ACCOUNT_ID>.dkr.ecr.<REGION>.amazonaws.com/dna-ledger-vault:latest",
+      "portMappings": [
+        {
+          "containerPort": 8080,
+          "protocol": "tcp"
+        }
+      ],
+      "environment": [
+        {
+          "name": "FLASK_ENV",
+          "value": "production"
+        }
+      ],
+      "mountPoints": [
+        {
+          "sourceVolume": "ledger_state",
+          "containerPath": "/app/state"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/dna-ledger-vault",
+          "awslogs-region": "<REGION>",
+          "awslogs-stream-prefix": "api-v1"
+        }
+      },
+      "command": ["gunicorn", "-w", "4", "-b", "0.0.0.0:8080", "api.server:app"],
+      "healthCheck": {
+        "command": ["CMD-SHELL", "curl -f http://localhost:8080/api/health || exit 1"],
+        "interval": 30,
+        "timeout": 5,
+        "retries": 3,
+        "startPeriod": 10
+      }
+    },
+    {
+      "name": "api-v2",
+      "image": "<ACCOUNT_ID>.dkr.ecr.<REGION>.amazonaws.com/dna-ledger-vault:latest",
+      "portMappings": [
+        {
+          "containerPort": 8081,
+          "protocol": "tcp"
+        }
+      ],
+      "mountPoints": [
+        {
+          "sourceVolume": "ledger_state",
+          "containerPath": "/app/state"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/dna-ledger-vault",
+          "awslogs-region": "<REGION>",
+          "awslogs-stream-prefix": "api-v2"
+        }
+      },
+      "command": ["uvicorn", "api.v2.observability:app", "--host", "0.0.0.0", "--port", "8081"],
+      "healthCheck": {
+        "command": ["CMD-SHELL", "curl -f http://localhost:8081/ || exit 1"],
+        "interval": 30,
+        "timeout": 5,
+        "retries": 3,
+        "startPeriod": 10
+      }
+    }
+  ],
+  "volumes": [
+    {
+      "name": "ledger_state",
+      "efsVolumeConfiguration": {
+        "fileSystemId": "<EFS_FILE_SYSTEM_ID>",
+        "transitEncryption": "ENABLED",
+        "authorizationConfig": {
+          "iam": "ENABLED"
+        }
+      }
+    }
+  ]
+}
