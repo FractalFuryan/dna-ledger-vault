@@ -7,6 +7,9 @@ pydantic>=2.0.0,<3.0.0        # Type-safe data validation
 blake3>=0.4.0,<1.0.0          # Fast parallel hashing
 ecdsa>=0.18.0,<1.0.0          # RFC6979 deterministic ECDSA (secp256k1)
 
+# GA4GH Passport/Visa support
+pyjwt[crypto]>=2.8.0,<3.0.0   # JWT signing/verification (EdDSA/Ed25519)
+
 # Ethereum bridge dependencies
 web3>=6.0.0,<7.0.0            # Ethereum/Base interaction
 eth-account>=0.10.0,<1.0.0    # Account management & EIP-712

@@ -26,9 +26,11 @@ from dna_ledger.models import (
     KeyWrapEvent,
 )
 from dna_ledger.signing import gen_ed25519, sign_payload
+from dna_ledger.ga4gh_models import GA4GHVisa
 from vault.crypto import key_to_hex, new_key
 from vault.store import Vault
 from vault.wrap import gen_x25519, wrap_dek
+from vault.passport_issuer import PassportIssuer
 
 
 def b64e(b: bytes) -> str:
@@ -559,6 +561,114 @@ def cmd_verify(args):
     if not ok:
         raise SystemExit(1)
 
+def cmd_issue_passport(args):
+    """Issue a GA4GH Passport JWT for a grantee with active consent."""
+    p = ensure_state(args.out)
+    ledger = HashChainedLedger.load_from_jsonl(p["ledger"])
+    identities = load_identities(p["identities"])
+    
+    # Verify actor exists
+    if args.actor not in identities:
+        print(f"❌ Identity '{args.actor}' not found.")
+        return
+    
+    # Verify grantee exists
+    if args.grantee not in identities:
+        print(f"❌ Grantee identity '{args.grantee}' not found.")
+        return
+    
+    # Find active consent grants for this grantee + dataset
+    active_grants = []
+    for event in ledger.events:
+        if not isinstance(event, ConsentGrant):
+            continue
+        if event.dataset_id != args.dataset_id:
+            continue
+        if event.grantee != args.grantee:
+            continue
+        
+        # Check if not revoked
+        is_revoked = any(
+            isinstance(e, ConsentRevocation) 
+            and e.grant_id == event.grant_id
+            for e in ledger.events
+        )
+        if is_revoked:
+            continue
+        
+        # Check if not expired
+        try:
+            from datetime import datetime
+            exp_dt = datetime.fromisoformat(event.expires_utc.replace("Z", "+00:00"))
+            now_dt = datetime.now(exp_dt.tzinfo)
+            if now_dt > exp_dt:
+                continue
+        except Exception:
+            pass  # If parsing fails, include the grant
+        
+        active_grants.append(event)
+    
+    if not active_grants:
+        print(f"❌ No active consent grant found for:")
+        print(f"   - Grantee: {args.grantee}")
+        print(f"   - Dataset: {args.dataset_id}")
+        return
+    
+    # Use the first active grant (could extend to multiple visas)
+    grant = active_grants[0]
+    
+    # Create GA4GH Visa from ConsentGrant
+    visa = GA4GHVisa.from_consent_grant(grant)
+    
+    # Initialize passport issuer
+    try:
+        issuer = PassportIssuer.from_identity_folder(args.out, args.actor)
+    except Exception as e:
+        print(f"❌ Failed to load passport issuer: {e}")
+        return
+    
+    # Issue passport
+    try:
+        passport_jwt = issuer.issue_passport(
+            subject=args.grantee,
+            visas=[visa],
+            lifetime_hours=args.lifetime
+        )
+    except Exception as e:
+        print(f"❌ Failed to issue passport: {e}")
+        return
+    
+    # Output passport
+    print("\n" + "="*80)
+    print("✅ GA4GH Passport JWT Issued")
+    print("="*80)
+    print(f"\nIssuer:    {args.actor}")
+    print(f"Subject:   {args.grantee}")
+    print(f"Dataset:   {args.dataset_id}")
+    print(f"Purpose:   {grant.purpose}")
+    print(f"Lifetime:  {args.lifetime} hours")
+    print(f"Visas:     1 (ControlledAccessGrants)")
+    print(f"\nJWT:\n{passport_jwt}")
+    print("\n" + "="*80)
+    
+    # Optionally save to file
+    if args.save:
+        passports_dir = os.path.join(args.out, "passports")
+        os.makedirs(passports_dir, exist_ok=True)
+        
+        passport_file = os.path.join(
+            passports_dir,
+            f"{args.grantee}_{args.dataset_id}_{int(time.time())}.jwt"
+        )
+        
+        with open(passport_file, "w") as f:
+            f.write(passport_jwt)
+        
+        print(f"\n💾 Passport saved to: {passport_file}")
+    
+    print(f"\n🔍 Passport uses EdDSA (Ed25519) signatures for cryptographic consistency")
+    print(f"   Compatible with GA4GH v1.1 specification")
+
 def main() -> None:
     p = argparse.ArgumentParser(prog="dna-ledger-vault")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -621,6 +731,16 @@ def main() -> None:
     e.add_argument("--bundle-dir", required=True, help="Output directory for evidence bundle")
     e.add_argument("--actor", required=True, help="Identity signing the evidence bundle")
     e.set_defaults(func=cmd_export_evidence)
+
+    # issue-passport
+    pp = sub.add_parser("issue-passport", help="Issue GA4GH Passport JWT for a grantee")
+    pp.add_argument("--out", required=True, help="State directory")
+    pp.add_argument("--actor", required=True, help="Identity issuing the passport (dataset owner)")
+    pp.add_argument("--grantee", required=True, help="Researcher identity to receive passport")
+    pp.add_argument("--dataset-id", required=True, help="Target dataset")
+    pp.add_argument("--lifetime", type=int, default=24, help="Passport lifetime in hours (default: 24)")
+    pp.add_argument("--save", action="store_true", help="Save passport to file")
+    pp.set_defaults(func=cmd_issue_passport)
 
     # verify
     v = sub.add_parser("verify", help="Verify ledger integrity")
