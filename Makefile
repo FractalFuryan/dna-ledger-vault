@@ -1,4 +1,4 @@
-.PHONY: help install install-foundry test verify clean format lint ethics status docs-verify contracts deploy-sepolia typecheck
+.PHONY: help install install-foundry test verify clean format lint ethics status docs-verify contracts deploy-sepolia typecheck boundary
 
 help:
 	@echo "DNA Ledger Vault - Makefile targets"
@@ -20,6 +20,7 @@ help:
 	@echo "Verification:"
 	@echo "  make verify       - Verify ledger integrity"
 	@echo "  make docs-verify  - Verify documentation completeness"
+	@echo "  make boundary     - Verify math/interpretation boundary"
 	@echo "  make status       - Quick status check"
 	@echo ""
 	@echo "Code Quality:"
@@ -64,6 +65,9 @@ format:
 
 typecheck:
 	mypy .
+
+boundary:
+	python tools/check_boundaries.py
 
 clean:
 	find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true

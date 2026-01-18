@@ -38,6 +38,26 @@ See [RELEASE_NOTES.md](RELEASE_NOTES.md) for complete audit compliance summary.
 
 ---
 
+## 🔬 Math vs Interpretation Boundary
+
+**We use the classical Gaussian explicit formula as a fixed mathematical substrate.** No new number-theoretic claims are made.
+
+Our contribution is an **optional interpretive/constraint layer** that does not modify the underlying mathematics. This separation ensures:
+
+- ✅ Mathematical substrate remains **classical, unchanged, non-owned**
+- ✅ Interpretive frameworks are **optional, falsifiable, clearly labeled**
+- ✅ Engineering systems are **independent** of speculative claims
+- ✅ Cryptographic guarantees are **verifiable** without belief in upper layers
+
+**Documentation:**
+- [docs/SCALAR_WAZE_BOUNDARY.md](docs/SCALAR_WAZE_BOUNDARY.md) - Math/interpretation separation
+- [docs/NON_CLAIMS.md](docs/NON_CLAIMS.md) - Hard boundary (what we do NOT claim)
+- [docs/CLAIMS_REGISTER.md](docs/CLAIMS_REGISTER.md) - Explicit categorization of all claims
+
+**Enforcement:** `make boundary` verifies this boundary via CI gate.
+
+---
+
 ## Threat model (non-negotiable)
 DNA is inherently identifying. This repo **never** stores raw sequences/variants in the ledger.
 Only tamper-evident proofs and permissions are recorded.

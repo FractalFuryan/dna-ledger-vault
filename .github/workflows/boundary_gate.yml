@@ -1,0 +1,41 @@
+name: boundary-gate
+
+on:
+  pull_request:
+  push:
+    branches: [ main, master ]
+
+jobs:
+  boundary-check:
+    name: Verify Math/Interpretation Boundary
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      
+      - name: Run boundary gate
+        run: python tools/check_boundaries.py
+      
+      - name: Verify no bleed-through
+        run: |
+          echo "Checking for forbidden claim patterns..."
+          
+          # Fail if we claim to prove RH
+          if grep -r "prove.*Riemann Hypothesis" docs/ --exclude-dir=.git; then
+            echo "❌ Found RH proof claim"
+            exit 1
+          fi
+          
+          # Fail if we claim to modify classical results
+          if grep -r "new.*zeta.*identity" docs/ --exclude-dir=.git | grep -v "NOT"; then
+            echo "❌ Found claim of new zeta identity"
+            exit 1
+          fi
+          
+          echo "✅ No forbidden patterns detected"
