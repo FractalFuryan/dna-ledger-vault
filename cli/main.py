@@ -949,14 +949,9 @@ def main() -> None:
     se.add_argument("--report", action="store_true", help="Generate compliance reports (JSON + human-readable)")
     se.set_defaults(func=cmd_secure_erase)
 
-    # verify
-    v = sub.add_parser("verify", help="Verify ledger integrity")
-    v.add_argument("--out", required=True)
-    v.set_defaults(func=cmd_verify)
-
-    # onboarding (command group)
+    # onboarding (command group) - explicitly namespaced to avoid future collisions
     ob = sub.add_parser("onboarding", help="Customer onboarding and compliance tools")
-    ob_sub = ob.add_subparsers(dest="onboarding_cmd")
+    ob_sub = ob.add_subparsers(dest="onboarding_cmd", required=True)
     
     # onboarding wizard
     ob_wizard = ob_sub.add_parser("wizard", help="Interactive onboarding wizard")
@@ -984,6 +979,11 @@ def main() -> None:
     ob_check = ob_sub.add_parser("generate-checklist", help="Generate GDPR/CPRA compliance checklist")
     ob_check.add_argument("--out", default="./compliance_checklist.csv", help="Output file path")
     ob_check.set_defaults(func=cmd_onboarding_checklist)
+
+    # verify
+    v = sub.add_parser("verify", help="Verify ledger integrity")
+    v.add_argument("--out", required=True)
+    v.set_defaults(func=cmd_verify)
 
     args = p.parse_args()
     if hasattr(args, "func"):

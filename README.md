@@ -1,7 +1,7 @@
 # dna-ledger-vault 🧬⛓️🔐
 
-[![Release](https://img.shields.io/badge/release-v1.1.0--ethereum-blue.svg)](https://github.com/FractalFuryan/dna-ledger-vault)
-[![Tests](https://img.shields.io/badge/tests-55%2F55-brightgreen.svg)](#security-invariants)
+[![Release](https://img.shields.io/badge/release-v2.2.0--deployment--kit-blue.svg)](https://github.com/FractalFuryan/dna-ledger-vault)
+[![Tests](https://img.shields.io/badge/tests-83%2F83-brightgreen.svg)](#security-invariants)
 [![Python](https://img.shields.io/badge/python-3.12-blue.svg)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Boundary](https://img.shields.io/badge/boundary-enforced-green.svg)](#-math-vs-interpretation-boundary)
@@ -12,6 +12,8 @@
 - Revocations (explicit on-ledger truth)
 - Compute attestations (algo + output hashing)
 - Key rotation events (forward secrecy + post-compromise safety)
+
+**Phase 2 complete:** Enterprise onboarding, observability, and deployment hardening.
 
 This is the "only kind" of DNA blockchain tech that doesn't blow up privacy:
 ✅ Zero raw DNA on-chain/ledger  

@@ -17,6 +17,23 @@ DNA Ledger Vault Web Dashboard provides a **browser-based interface** for:
 
 ---
 
+## ⚠️ CRITICAL INVARIANT: Dashboard Non-Authority
+
+**The dashboard is strictly observational.**
+
+It must never:
+- ❌ Gate access to datasets or operations
+- ❌ Alter consent policy or governance rules
+- ❌ Trigger enforcement actions
+- ❌ Initiate cryptographic operations (signing, encryption, key rotation)
+
+All mutations flow through the CLI or direct API calls with explicit actor identity.
+**The dashboard displays state; it does not create or modify it.**
+
+This invariant prevents a future "helpful" engineer from turning charts into controls.
+
+---
+
 ## Quick Start
 
 ### Development Mode

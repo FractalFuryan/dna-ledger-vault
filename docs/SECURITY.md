@@ -29,6 +29,20 @@ This hash cryptographically commits to the hard ethical invariants governing DNA
 
 These are the **non-negotiable properties** that the system enforces. Any violation indicates compromise or implementation error.
 
+### 0. Dashboard Non-Authority (Phase 2 Invariant)
+**Invariant:** The dashboard is strictly observational.
+
+It must never:
+- ❌ Gate access to datasets or operations
+- ❌ Alter consent policy or governance rules
+- ❌ Trigger enforcement actions
+- ❌ Initiate cryptographic operations (signing, encryption, key rotation)
+
+All mutations flow through the CLI or direct API calls with explicit actor identity.
+**The dashboard displays state; it does not create or modify it.**
+
+This prevents a future "helpful" engineer from turning charts into controls.
+
 ### 1. Append-Only Ledger
 **Invariant:** Ledger entries are never modified or deleted. All state changes emit new events.
 - ✅ Consent grants are never mutated
