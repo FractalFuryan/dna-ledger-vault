@@ -15,7 +15,18 @@ state/
 .idea/
 
 # Foundry/Ethereum
-out/
-cache/
-broadcast/
+contracts/out/
+contracts/cache/
+contracts/broadcast/
 .env
+
+# Proprietary components (never commit)
+living-cipher/
+ananke-core/
+*.key
+*.pem
+*.pt
+*.bin
+*.wasm
+circuits/build/
+circuits/optimized/
