@@ -5,6 +5,7 @@
 cryptography>=42.0.0,<47.0.0  # Ed25519, X25519, ChaCha20-Poly1305
 pydantic>=2.0.0,<3.0.0        # Type-safe data validation
 blake3>=0.4.0,<1.0.0          # Fast parallel hashing
+ecdsa>=0.18.0,<1.0.0          # RFC6979 deterministic ECDSA (secp256k1)
 
 # Ethereum bridge dependencies
 web3>=6.0.0,<7.0.0            # Ethereum/Base interaction
